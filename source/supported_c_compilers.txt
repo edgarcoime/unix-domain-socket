@@ -1,3 +1,0 @@
-gcc
-clang
-clang-16
