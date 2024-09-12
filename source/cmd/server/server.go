@@ -14,7 +14,7 @@ func main() {
 	fmt.Printf("Server Application\nMax Clients %d\n", pkg.MaxClients)
 
 	// Instantiate client
-	clientConn, err := server.NewClientConn()
+	_, err := server.NewClientConn()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -24,6 +24,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	fmt.Printf("%s\n", dss.Socket)
 
 	// instantiate server
 

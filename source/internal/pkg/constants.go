@@ -1,5 +1,5 @@
 package pkg
 
 const (
-	MaxClients = 10
+	DEFAULT_SOCKET = "/tmp/dss.sock"
 )
