@@ -26,11 +26,8 @@ func readFile(fname string) (string, error) {
 		txt += scanner.Text()
 	}
 
-	if err := scanner.Err; err != nil {
-		return txt, 
-	}
-
 	// Check if error in scan
+	return "", nil
 }
 
 func main() {

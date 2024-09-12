@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -26,7 +25,10 @@ func NewDomainSocketServer() (*DomainSocketServer, error) {
 		MaxClients: DEFAULT_MAX_CLIENTS,
 	}
 	// Upon creating DSS should listen right away
-	dss.Listen()
+	err := dss.Listen()
+	if err != nil {
+		return dss, err
+	}
 
 	return dss, nil
 }
@@ -61,8 +63,6 @@ func (dss *DomainSocketServer) Listen() error {
 
 func (dss *DomainSocketServer) Close() {
 	// Cleanup server and destroy any used resources
-	fmt.Println("Closing server")
-
 	// Cleanup Socket file
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
