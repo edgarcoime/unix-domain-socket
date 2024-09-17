@@ -21,7 +21,7 @@ type DomainSocketServer struct {
 
 func NewDomainSocketServer() (*DomainSocketServer, error) {
 	dss := &DomainSocketServer{
-		Socket:     pkg.DEFAULT_SOCKET,
+		Socket:     pkg.DEFAULT_SOCKET_FILE,
 		MaxClients: DEFAULT_MAX_CLIENTS,
 	}
 	// Upon creating DSS should listen right away
@@ -35,7 +35,7 @@ func NewDomainSocketServer() (*DomainSocketServer, error) {
 
 func (dss *DomainSocketServer) Listen() error {
 	// Setup Connection
-	listener, err := net.Listen("unix", pkg.DEFAULT_SOCKET)
+	listener, err := net.Listen("unix", pkg.DEFAULT_SOCKET_FILE)
 	if err != nil {
 		return err
 	}

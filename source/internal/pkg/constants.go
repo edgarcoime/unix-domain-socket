@@ -1,5 +1,5 @@
 package pkg
 
 const (
-	DEFAULT_SOCKET = "/tmp/dss.sock"
+	DEFAULT_SOCKET_FILE = "/tmp/dss.sock"
 )

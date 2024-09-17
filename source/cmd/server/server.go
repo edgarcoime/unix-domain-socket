@@ -5,19 +5,16 @@ import (
 	"log"
 
 	"github.com/edgarcoime/domainsocket/internal/app/server"
-	"github.com/edgarcoime/domainsocket/internal/pkg"
+)
+
+const (
+	MAX_CLIENTS = 10
 )
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	fmt.Printf("Server Application\nMax Clients %d\n", pkg.MaxClients)
-
-	// Instantiate client
-	_, err := server.NewClientConn()
-	if err != nil {
-		log.Fatal(err)
-	}
+	fmt.Printf("Server Application\nMax Clients %d\n")
 
 	// Instantiate Domain Socket Server
 	dss, err := server.NewDomainSocketServer()
