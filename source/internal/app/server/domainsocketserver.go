@@ -61,6 +61,20 @@ func (dss *DomainSocketServer) Listen() error {
 	}
 }
 
+func (dss *DomainSocketServer) ProcessFile(name string) string {
+	// Open file name
+	// Process the content of the file through chunks
+	// Use StringBuilder to be more efficient with memory
+	// return the string as a big chunk hopefully not as big
+
+	return ""
+}
+
+func (dss *DomainSocketServer) ListAllFiles() string {
+	// return formatted version all files contained in db folder
+	return ""
+}
+
 func (dss *DomainSocketServer) Close() {
 	// Cleanup server and destroy any used resources
 	// Cleanup Socket file
