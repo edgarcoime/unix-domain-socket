@@ -6,8 +6,8 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/signal"
-	"syscall"
+
+	"github.com/edgarcoime/domainsocket/internal/pkg"
 )
 
 func reader(r io.Reader) error {
@@ -19,7 +19,6 @@ func reader(r io.Reader) error {
 		}
 		println("Client got:", string(buf[0:n]))
 	}
-	return nil
 }
 
 func main() {
@@ -33,22 +32,30 @@ func main() {
 	filepath := os.Args[2]
 	fmt.Println(filepath)
 
+	// Test if file exts from client perspective
+	if pkg.FileExists(filepath) {
+		println("File exists, ", filepath)
+	} else {
+		println("File does not exist in, ", filepath)
+	}
+
 	// establish connection
 	conn, err := net.Dial("unix", sock)
 	if err != nil {
 		log.Fatal(err)
 		log.Fatalf("Failed to connect to the socket: %s", err)
 	}
+	defer conn.Close()
 
 	fmt.Println("Connected to the Unix socket.")
 
-	// Setup teardown
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func(con net.Conn) {
-		fmt.Println("Closing all connections...")
-		conn.Close()
-	}(conn)
+	// // Setup teardown
+	// c := make(chan os.Signal, 1)
+	// signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	// go func(con net.Conn) {
+	// 	fmt.Println("Closing all connections...")
+	// 	conn.Close()
+	// }(conn)
 
 	// Write message to the server
 	outboundMsg := []byte(filepath)
@@ -56,6 +63,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to write to the socket: %s", err)
 	}
+
+	// Wait for the response
 
 	// Read inbound message from the server
 	buf := make([]byte, 4096)

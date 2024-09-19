@@ -155,22 +155,34 @@ func (dss *DomainSocketServer) Start() error {
 			// Create buffer for incoming data
 			buf := make([]byte, 4096)
 
-			// read data from connection
+			// NEED n so that null bytes are ommitted when converting to string
 			n, err := nc.Read(buf)
 			if err != nil {
 				log.Println(err)
 				return
 			}
 
+			// only Slices can be converted to string not []byte
+			filepath := string(buf[:n])
+
+			// Search for file
+			msg, err := pkg.CheckFileExists(filepath)
+			if err != nil {
+				log.Println(err)
+				msg = "File does not exist. Please check the name and directory."
+			}
+			println("Server Msg: ", msg)
+
+			// convert msg into bytes
+			outgoing := []byte(msg)
+
 			// Echo back message to client connection
-			_, err = nc.Write(buf[:n])
+			_, err = nc.Write(outgoing)
 			if err != nil {
 				log.Println(err)
 			}
 		}(conn)
 	}
-
-	return nil
 
 	// // Initiate server listening to communication channels in a seperate goroutine
 	// dss.listen()
@@ -192,7 +204,6 @@ func (dss *DomainSocketServer) Start() error {
 
 func (dss *DomainSocketServer) close() {
 	// Cleanup server and destroy any used resources
-	fmt.Println("Server cleanup starting")
 	close(dss.joining)
 	close(dss.leaving)
 	close(dss.clientErrors)

@@ -19,6 +19,12 @@ func CheckFileExists(filepath string) (string, error) {
 	return msg, nil
 }
 
+func FileExists(filepath string) bool {
+	f, err := os.Open(filepath)
+	defer f.Close()
+	return err == nil
+}
+
 func ReadTextFileContents(filepath string) (string, error) {
 	f, err := os.Open(filepath)
 	// Attempt to open file, handle error, and defer close
