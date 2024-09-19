@@ -69,8 +69,11 @@ func (dss *DomainSocketServer) Listen() error {
 		return pkg.HandleErrorFormat("DomainSocketServer.Listen: Error listening to socket", err)
 	}
 
-	// Setup Tear Down function
-	defer func(l net.Listener, s *DomainSocketServer) {
+	// Setup Tear Down function to catch signal interrupts
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func(l net.Listener, s *DomainSocketServer) {
+		<-c
 		s.Close()
 		err := l.Close()
 		if err != nil {
@@ -156,11 +159,6 @@ func (dss *DomainSocketServer) ProcessFile(filepath string) (string, error) {
 func (dss *DomainSocketServer) Close() {
 	// Cleanup server and destroy any used resources
 	// Cleanup Socket file
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-c
-		os.Remove(dss.Opts.Socket)
-		os.Exit(1)
-	}()
+	fmt.Println("Server cleanup starting")
+	os.Remove(dss.Opts.Socket)
 }
