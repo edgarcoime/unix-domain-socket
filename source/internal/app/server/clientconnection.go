@@ -7,6 +7,18 @@ import (
 	"github.com/edgarcoime/domainsocket/internal/pkg"
 )
 
+type ClientConnectionError struct {
+	CC    *ClientConnection
+	Error error
+}
+
+func CreateCCError(cc *ClientConnection, err error) *ClientConnectionError {
+	return &ClientConnectionError{
+		CC:    cc,
+		Error: err,
+	}
+}
+
 type ClientConnection struct {
 	ID   int64
 	Conn net.Conn
@@ -31,17 +43,16 @@ func (cc *ClientConnection) WriteToClient(s string) error {
 	return nil
 }
 
-func (cc *ClientConnection) ProcessRequest(leaving chan *ClientConnection, errors chan error) {
+func (cc *ClientConnection) ProcessRequest(leaving chan *ClientConnection, errors chan *ClientConnectionError) {
 	fmt.Println("ClientConnection processing request...")
 	buf := make([]byte, 4096)
 
 	// NEED n so that null bytes are ommitted when converting to string
 	n, err := cc.Conn.Read(buf)
 	if err != nil {
-		msg := "ClientConnection.ProcessRequest: Could not read client message through buffer."
 		cc.WriteToClient("Could not read incoming message.")
-		errors <- pkg.HandleErrorFormat(msg, err)
-		return
+		msg := "ClientConnection.ProcessRequest: Could not read client message through buffer."
+		errors <- CreateCCError(cc, pkg.HandleErrorFormat(msg, err))
 	}
 
 	// Only slices can be converted to string not []byte
@@ -50,17 +61,16 @@ func (cc *ClientConnection) ProcessRequest(leaving chan *ClientConnection, error
 	// Client will just send filename
 	m, err := pkg.CheckFileExists(filepath)
 	if err != nil {
+		cc.WriteToClient(fmt.Sprintf("File does not exist or given invalid path. Please check path given."))
 		msg := fmt.Sprintf("ClientConnection.ProcessRequest: File does not exist or invalid name.")
-		cc.WriteToClient(m)
-		errors <- pkg.HandleErrorFormat(msg, err)
-		return
+		errors <- CreateCCError(cc, pkg.HandleErrorFormat(msg, err))
 	}
 
 	// Echo message back to user
 	err = cc.WriteToClient(m)
 	if err != nil {
-		errors <- err
-		return
+		cc.WriteToClient("Could not write back to respond.")
+		errors <- CreateCCError(cc, err)
 	}
 
 	fmt.Println(m)

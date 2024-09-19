@@ -50,7 +50,7 @@ type DomainSocketServer struct {
 	connections   map[int64]*ClientConnection
 	joining       chan *ClientConnection
 	leaving       chan *ClientConnection
-	clientErrors  chan error
+	clientErrors  chan *ClientConnectionError
 	teardownFuncs []TeardownFunc
 }
 
@@ -67,7 +67,7 @@ func NewDomainSocketServer(opts ...DSSOptsFunc) *DomainSocketServer {
 		connections:   make(map[int64]*ClientConnection),
 		joining:       make(chan *ClientConnection), // Incoming clients that need to be processed
 		leaving:       make(chan *ClientConnection), // Incoming clients that need to be processed
-		clientErrors:  make(chan error),
+		clientErrors:  make(chan *ClientConnectionError),
 		teardownFuncs: []TeardownFunc{},
 	}
 
@@ -149,9 +149,12 @@ func (dss *DomainSocketServer) leave(cc *ClientConnection) {
 	delete(dss.connections, cc.ID)
 }
 
-func (dss *DomainSocketServer) handleClientError(err error) {
+func (dss *DomainSocketServer) handleClientError(ccErr *ClientConnectionError) {
+	fmt.Printf("%+v\n", ccErr.CC)
+	fmt.Printf("num: %d\n", len(dss.leaving))
+
 	msg := fmt.Sprintf("Internal Client Error: ")
-	log.Println(pkg.HandleErrorFormat(msg, err))
+	log.Println(pkg.HandleErrorFormat(msg, ccErr.Error))
 }
 
 func (dss *DomainSocketServer) Start() error {
@@ -191,7 +194,7 @@ func (dss *DomainSocketServer) handleConnections(l net.Listener) {
 		if err != nil {
 			// TODO: how to handle if client does not accept cause infinite loops
 			msg := fmt.Sprintf("DomainSocketServer.handleConnections: Failed to accept client")
-			dss.clientErrors <- pkg.HandleErrorFormat(msg, err)
+			dss.clientErrors <- CreateCCError(nil, pkg.HandleErrorFormat(msg, err))
 		}
 
 		client := NewClientConnection(conn)
