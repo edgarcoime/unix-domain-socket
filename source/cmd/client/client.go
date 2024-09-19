@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 
 	"github.com/edgarcoime/domainsocket/internal/pkg"
 )
@@ -12,6 +13,7 @@ import (
 const (
 	DEFAULT_SOCKET_FILE = pkg.DEFAULT_SOCKET_FILE
 	DEFAULT_FILEPATH    = ""
+	MAX_CMD_ARGUMENTS   = 4
 )
 
 type ClientOptsFunc func(*ClientOpts)
@@ -51,8 +53,21 @@ func NewClientOpts(opts ...ClientOptsFunc) *ClientOpts {
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
+	// Validate max amount of args
+	if len(os.Args) > MAX_CMD_ARGUMENTS+1 {
+		msg := fmt.Sprintf(`
+The Client application only allows for %d arguments including flags.
+Please supply at least the desired filename to run the program or use the following helper:
+			-h : Supplies a help menu for arguments
+`, MAX_CMD_ARGUMENTS)
+		log.Fatal(msg)
+	}
+
 	var paramSocket string
 	var paramFilename string
+
+	fmt.Println(len(os.Args))
+	fmt.Println(os.Args)
 
 	flag.StringVar(
 		&paramSocket, "s", DEFAULT_SOCKET_FILE,

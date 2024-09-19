@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/edgarcoime/domainsocket/internal/app/server"
 	"github.com/edgarcoime/domainsocket/internal/pkg"
@@ -12,6 +13,7 @@ import (
 const (
 	DEFAULT_SOCKET_FILE = pkg.DEFAULT_SOCKET_FILE
 	DEFAULT_MAX_CLIENTS = pkg.DEFAULT_MAX_CLIENTS
+	MAX_CMD_ARGUMENTS   = 4
 )
 
 type ServerParams struct {
@@ -38,6 +40,15 @@ func (sp *ServerParams) SetMaxClient(n uint) *ServerParams {
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	// Validate max amount of args
+	if len(os.Args) > MAX_CMD_ARGUMENTS+1 {
+		msg := fmt.Sprintf(`
+The Server application only allows for %d arguments including flags.
+You do not need to supply a flag to run the program but look at the -h docs to change functionality.
+			-h : Supplies a help menu for arguments
+`, MAX_CMD_ARGUMENTS)
+		log.Fatal(msg)
+	}
 
 	// Set flags
 	var paramSocket string

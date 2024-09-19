@@ -24,7 +24,7 @@ func CheckTextFileExists(filepath string) (string, error) {
 func CheckFileExists(filepath string) (string, error) {
 	if _, err := os.Stat(filepath); err == nil {
 		// Exists
-		msg := fmt.Sprintf("File exists in %s filepath.", filepath)
+		msg := fmt.Sprintf("FILE or DIRECTORY exists in %s filepath.", filepath)
 		return msg, nil
 	} else if errors.Is(err, fs.ErrNotExist) {
 		// Does *not* exist
