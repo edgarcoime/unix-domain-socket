@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"syscall"
 
 	"github.com/edgarcoime/domainsocket/internal/pkg"
 )
@@ -44,12 +43,15 @@ func DSSWithSocket(s string) DSSOptsFunc {
 }
 
 // DOMAINSOCKETSERVER STRUCT
+type TeardownFunc func(*DomainSocketServer)
+
 type DomainSocketServer struct {
-	Opts         DomainSocketServerOpts
-	connections  map[int64]*ClientConnection
-	joining      chan *ClientConnection
-	leaving      chan *ClientConnection
-	clientErrors chan error
+	Opts          DomainSocketServerOpts
+	connections   map[int64]*ClientConnection
+	joining       chan *ClientConnection
+	leaving       chan *ClientConnection
+	clientErrors  chan error
+	teardownFuncs []TeardownFunc
 }
 
 func NewDomainSocketServer(opts ...DSSOptsFunc) *DomainSocketServer {
@@ -59,13 +61,42 @@ func NewDomainSocketServer(opts ...DSSOptsFunc) *DomainSocketServer {
 		fn(&o)
 	}
 
-	return &DomainSocketServer{
+	dss := &DomainSocketServer{
 		Opts: o,
 		// Handle non-negotiable attributes
-		connections:  make(map[int64]*ClientConnection),
-		joining:      make(chan *ClientConnection), // Incoming clients that need to be processed
-		leaving:      make(chan *ClientConnection), // Outgoing clients that need to be exited
-		clientErrors: make(chan error),
+		connections:   make(map[int64]*ClientConnection),
+		joining:       make(chan *ClientConnection), // Incoming clients that need to be processed
+		leaving:       make(chan *ClientConnection), // Outgoing clients that need to be exited
+		clientErrors:  make(chan error),
+		teardownFuncs: []TeardownFunc{},
+	}
+
+	// Teardown will at least have dss.Close
+	teardownFunc := func() TeardownFunc {
+		return func(s *DomainSocketServer) {
+			fmt.Println("Teardown: dss.close")
+			s.close()
+		}
+	}()
+	dss.teardownFuncs = append(dss.teardownFuncs, teardownFunc)
+
+	// Setup Teardown lifeline
+	c := make(chan os.Signal, 1)
+	signal.Notify(c) // Notifies c if os calls signal (no args means everything)
+	go func(server *DomainSocketServer) {
+		<-c
+		fmt.Println("OS Signal interrupt shutting down...")
+		server.Shutdown()
+		os.Exit(1)
+	}(dss)
+
+	return dss
+}
+
+func (dss *DomainSocketServer) Shutdown() {
+	// Shutdown in reverse order
+	for i := len(dss.teardownFuncs) - 1; i >= 0; i-- {
+		dss.teardownFuncs[i](dss)
 	}
 }
 
@@ -119,26 +150,30 @@ func (dss *DomainSocketServer) handleClientError(err error) {
 }
 
 func (dss *DomainSocketServer) Start() error {
-	// Setup Connection
-	fmt.Println("starting up server...")
+	defer dss.Shutdown()
+
+	fmt.Println("Starting server...")
+
+	// Activate Listener
 	listener, err := net.Listen("unix", dss.Opts.Socket)
 	if err != nil {
-		return pkg.HandleErrorFormat("DomainSocketServer.Listen: Error listening to socket", err)
+		log.Fatalf("Error occured during net.Listen: %s\n", err)
 	}
 
-	// Setup Tear Down function to catch signal interrupts
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func(l net.Listener, s *DomainSocketServer) {
-		<-c
-		s.close()
-		err := l.Close()
-		if err != nil {
-			log.Fatal(pkg.HandleErrorFormat("DomainSocketServer.Listen: Error shutting down listener", err))
+	teardownFunc := func(l net.Listener) TeardownFunc {
+		return func(s *DomainSocketServer) {
+			fmt.Println("Teardown: closing net connection")
+			err := l.Close()
+			if err != nil {
+				log.Printf("Error occured while closing net connection: %s\n", err)
+			}
 		}
-	}(listener, dss)
+	}(listener)
+	dss.teardownFuncs = append(dss.teardownFuncs, teardownFunc)
 
-	// Echo server
+	fmt.Println(len(dss.teardownFuncs))
+
+	// Communication loop for echo server
 	for {
 		// Accept connection
 		conn, err := listener.Accept()
@@ -182,23 +217,6 @@ func (dss *DomainSocketServer) Start() error {
 			}
 		}(conn)
 	}
-
-	// // Initiate server listening to communication channels in a seperate goroutine
-	// dss.listen()
-	//
-	// // Initiate locking while loop to parse new connections and/or leave requests
-	// for {
-	// 	// Accept inc connections and handle client errors
-	// 	conn, err := listener.Accept()
-	// 	if err != nil {
-	// 		msg := fmt.Sprintf("DomainSocketServer.Listen: Failed to accept client %s", conn.LocalAddr().String())
-	// 		dss.clientErrors <- pkg.HandleErrorFormat(msg, err)
-	// 	}
-	//
-	// 	// Instantiate connection
-	// 	newCC := NewClientConnection(conn)
-	// 	dss.joining <- newCC
-	// }
 }
 
 func (dss *DomainSocketServer) close() {
