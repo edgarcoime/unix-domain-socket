@@ -47,7 +47,11 @@ func DSSWithSocket(s string) DSSOptsFunc {
 
 // DOMAINSOCKETSERVER STRUCT
 type DomainSocketServer struct {
-	Opts DomainSocketServerOpts
+	Opts         DomainSocketServerOpts
+	connections  map[int64]*ClientConnection
+	joining      chan *ClientConnection
+	leaving      chan *ClientConnection
+	clientErrors chan error
 }
 
 func NewDomainSocketServer(opts ...DSSOptsFunc) *DomainSocketServer {
@@ -59,10 +63,60 @@ func NewDomainSocketServer(opts ...DSSOptsFunc) *DomainSocketServer {
 
 	return &DomainSocketServer{
 		Opts: o,
+		// Handle non-negotiable attributes
+		connections:  make(map[int64]*ClientConnection),
+		joining:      make(chan *ClientConnection), // Incoming clients that need to be processed
+		leaving:      make(chan *ClientConnection), // Outgoing clients that need to be exited
+		clientErrors: make(chan error),
 	}
 }
 
-func (dss *DomainSocketServer) Listen() error {
+func (dss *DomainSocketServer) listen() {
+	// Goroutine responsible for handling any clients coming in through the channels
+	go func() {
+		for {
+			select {
+			case conn := <-dss.joining:
+				dss.join(conn)
+			case conn := <-dss.leaving:
+				dss.leave(conn)
+			case err := <-dss.clientErrors:
+				dss.handleClientError(err)
+			}
+		}
+	}()
+}
+
+func (dss *DomainSocketServer) join(cc *ClientConnection) {
+	if len(dss.connections) >= int(dss.Opts.MaxConn) {
+		cc.Close()
+	}
+
+	// Establish client connected
+	dss.connections[cc.ID] = cc
+
+	// Process client request and handle bubble up error
+	err := cc.ProcessRequest()
+	if err != nil {
+		dss.clientErrors <- err
+		dss.leaving <- cc
+	}
+
+	dss.leaving <- cc
+}
+
+func (dss *DomainSocketServer) leave(cc *ClientConnection) {
+	// cleanup resources
+	delete(dss.connections, cc.ID)
+	cc.Close()
+}
+
+func (dss *DomainSocketServer) handleClientError(err error) {
+	msg := fmt.Sprintf("Internal Client Error: ")
+	log.Println(pkg.HandleErrorFormat(msg, err))
+}
+
+func (dss *DomainSocketServer) Start() error {
 	// Setup Connection
 	listener, err := net.Listen("unix", dss.Opts.Socket)
 	if err != nil {
@@ -74,12 +128,31 @@ func (dss *DomainSocketServer) Listen() error {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func(l net.Listener, s *DomainSocketServer) {
 		<-c
-		s.Close()
+		s.close()
 		err := l.Close()
 		if err != nil {
 			log.Fatal(pkg.HandleErrorFormat("DomainSocketServer.Listen: Error shutting down listener", err))
 		}
 	}(listener, dss)
+
+	// Initiate server listening to communication channels in a seperate goroutine
+	dss.listen()
+
+	// Initiate locking while loop to parse new connections and/or leave requests
+	for {
+		// Accept inc connections and handle client errors
+		conn, err := listener.Accept()
+		if err != nil {
+			msg := fmt.Sprintf("DomainSocketServer.Listen: Failed to accept client %s", conn.LocalAddr().String())
+			dss.clientErrors <- pkg.HandleErrorFormat(msg, err)
+		}
+
+		// Instantiate connection
+		newCC := NewClientConnection(conn)
+		dss.joining <- newCC
+	}
+
+	// Locking loop to handle incoming requests and handling channels
 
 	var failedConns []net.Addr
 	var clientCount uint16 = 0
@@ -87,8 +160,6 @@ func (dss *DomainSocketServer) Listen() error {
 		// Accept inc connections
 		conn, err := listener.Accept()
 		if err != nil {
-			// TODO: Should we stop server if client cannot connect?
-			// Move on to next client and try to accept next?
 			msg := fmt.Sprintf("DomainSocketServer.Listen: Failed to accept client %s", conn.LocalAddr().String())
 			log.Println(pkg.HandleErrorFormat(msg, err))
 			failedConns = append(failedConns, conn.LocalAddr())
@@ -123,13 +194,10 @@ func (dss *DomainSocketServer) Listen() error {
 				return
 			}
 		}(conn)
-
-		fmt.Printf("Client %d LEAVES\n", clientCount)
-		clientCount -= 1
 	}
 }
 
-func (dss *DomainSocketServer) ProcessFile(filepath string) (string, error) {
+func (dss *DomainSocketServer) processFile(filepath string) (string, error) {
 	f, err := os.Open(filepath)
 	// Attempt to open file, handle error, and defer close
 	if err != nil {
@@ -156,7 +224,7 @@ func (dss *DomainSocketServer) ProcessFile(filepath string) (string, error) {
 	return sb.String(), nil
 }
 
-func (dss *DomainSocketServer) Close() {
+func (dss *DomainSocketServer) close() {
 	// Cleanup server and destroy any used resources
 	// Cleanup Socket file
 	fmt.Println("Server cleanup starting")

@@ -34,18 +34,13 @@ func main() {
 	fmt.Printf("%s\n", currentPath)
 
 	// Activate the server
-	err := dss.Listen()
+	err := dss.Activate()
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// With newly instantiated server listen
 	// Defer cleanup
-
-	s, err := dss.ProcessFile(filePath)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	fmt.Println(s)
 	// Instantiate Domain Socket Server

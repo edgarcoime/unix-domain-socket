@@ -1,39 +1,44 @@
 package server
 
 import (
-	"bufio"
 	"net"
+
+	"github.com/edgarcoime/domainsocket/internal/pkg"
 )
 
 type ClientConnection struct {
+	ID     int64
 	Conn   net.Conn
-	Reader *bufio.Reader
-	Writer *bufio.Writer
+	Buffer []byte
 }
 
-func NewClientConnection(conn net.Conn) (*ClientConnection, error) {
-	writer := bufio.NewWriter(conn)
-	reader := bufio.NewReader(conn)
-
+func NewClientConnection(conn net.Conn) *ClientConnection {
 	cc := &ClientConnection{
+		ID:     pkg.GenerateUniqueID(),
 		Conn:   conn,
-		Writer: writer,
-		Reader: reader,
+		Buffer: make([]byte, 4096),
 	}
 
-	return cc, nil
+	return cc
 }
 
-func (cc *ClientConnection) Listen() error {
+func (cc *ClientConnection) ProcessRequest() error {
 	defer cc.Close()
-	return nil
-}
 
-func (cc *ClientConnection) Read() error {
-	return nil
-}
+	// Store user request in a buffer
+	m, err := cc.Conn.Read(cc.Buffer)
+	if err != nil {
+		msg := "ClientConnection.ProcessRequest: Could not read client message through buffer."
+		return pkg.HandleErrorFormat(msg, err)
+	}
 
-func (cc *ClientConnection) Write() error {
+	// Echo message back to user
+	_, err = cc.Conn.Write(cc.Buffer[:m])
+	if err != nil {
+		msg := "ClientConnection.ProcessRequest: Could not write message back to Client."
+		return pkg.HandleErrorFormat(msg, err)
+	}
+
 	return nil
 }
 
