@@ -1,8 +1,8 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -10,61 +10,91 @@ import (
 	"github.com/edgarcoime/domainsocket/internal/pkg"
 )
 
-func reader(r io.Reader) error {
-	buf := make([]byte, 4096)
-	for {
-		n, err := r.Read(buf[:])
-		if err != nil {
-			return err
-		}
-		println("Client got:", string(buf[0:n]))
+const (
+	DEFAULT_SOCKET_FILE = pkg.DEFAULT_SOCKET_FILE
+	DEFAULT_FILEPATH    = ""
+)
+
+type ClientOptsFunc func(*ClientOpts)
+
+type ClientOpts struct {
+	SocketFile string
+	Filepath   string
+}
+
+func defaultOpts() ClientOpts {
+	return ClientOpts{
+		SocketFile: DEFAULT_SOCKET_FILE,
+		Filepath:   DEFAULT_FILEPATH,
 	}
+}
+
+func withSocketFile(s string) ClientOptsFunc {
+	return func(opts *ClientOpts) {
+		opts.SocketFile = s
+	}
+}
+
+func withFilepath(s string) ClientOptsFunc {
+	return func(opts *ClientOpts) {
+		opts.Filepath = s
+	}
+}
+
+func NewClientOpts(opts ...ClientOptsFunc) *ClientOpts {
+	o := defaultOpts()
+	for _, fn := range opts {
+		fn(&o)
+	}
+	return &o
 }
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	if len(os.Args) < 3 {
-		log.Fatal("Please provide a socket to connect to and a filepath relative or absolute")
+		log.Fatal("Please provide an active socket to connect to and a valid filepath (relative or absolute)")
 	}
 
-	sock := os.Args[1]
-	filepath := os.Args[2]
-	fmt.Println(filepath)
+	var paramSocket string
+	var paramFilename string
 
-	// Test if file exts from client perspective
-	if pkg.FileExists(filepath) {
-		println("File exists, ", filepath)
-	} else {
-		println("File does not exist in, ", filepath)
+	flag.StringVar(
+		&paramSocket, "s", DEFAULT_SOCKET_FILE,
+		"s - (socket) A path to the socket file the application will try to bind to.",
+	)
+	flag.StringVar(
+		&paramFilename, "f", DEFAULT_FILEPATH,
+		"f - (file) A path to the file the client will ask the server about.",
+	)
+
+	// Parse flags
+	flag.Parse()
+	var opts []ClientOptsFunc
+	opts = append(opts, withSocketFile(pkg.StringInputParser(paramSocket)))
+	// Parse required arguments
+	if paramFilename == "" {
+		log.Fatal("Missing required parameter socket (-s), the client needs a path to a file to ask the server about.")
 	}
+	// Create options struct
+	opts = append(opts, withSocketFile(pkg.StringInputParser(paramSocket)))
+	opts = append(opts, withFilepath(pkg.StringInputParser(paramFilename)))
+	clientOptions := NewClientOpts(opts...)
 
 	// establish connection
-	conn, err := net.Dial("unix", sock)
+	conn, err := net.Dial("unix", clientOptions.SocketFile)
 	if err != nil {
 		log.Fatal(err)
 		log.Fatalf("Failed to connect to the socket: %s", err)
 	}
 	defer conn.Close()
 
-	fmt.Println("Connected to the Unix socket.")
-
-	// // Setup teardown
-	// c := make(chan os.Signal, 1)
-	// signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	// go func(con net.Conn) {
-	// 	fmt.Println("Closing all connections...")
-	// 	conn.Close()
-	// }(conn)
-
 	// Write message to the server
-	outboundMsg := []byte(filepath)
+	outboundMsg := []byte(clientOptions.Filepath)
 	_, err = conn.Write(outboundMsg)
 	if err != nil {
 		log.Fatalf("Failed to write to the socket: %s", err)
 	}
-
-	// Wait for the response
 
 	// Read inbound message from the server
 	buf := make([]byte, 4096)
@@ -75,5 +105,4 @@ func main() {
 
 	inboundMsg := string(buf[:n])
 	fmt.Printf("Server Response: %s\n", inboundMsg)
-	fmt.Println("shutting down...")
 }

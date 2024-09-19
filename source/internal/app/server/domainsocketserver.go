@@ -139,7 +139,6 @@ func (dss *DomainSocketServer) Start() error {
 	}(listener, dss)
 
 	// Echo server
-
 	for {
 		// Accept connection
 		conn, err := listener.Accept()
