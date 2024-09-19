@@ -1,13 +1,11 @@
 package server
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 
 	"github.com/edgarcoime/domainsocket/internal/pkg"
@@ -88,6 +86,7 @@ func (dss *DomainSocketServer) listen() {
 }
 
 func (dss *DomainSocketServer) join(cc *ClientConnection) {
+	fmt.Println("Client connecting...")
 	if len(dss.connections) >= int(dss.Opts.MaxConn) {
 		cc.Close()
 	}
@@ -98,26 +97,30 @@ func (dss *DomainSocketServer) join(cc *ClientConnection) {
 	// Process client request and handle bubble up error
 	err := cc.ProcessRequest()
 	if err != nil {
-		dss.clientErrors <- err
-		dss.leaving <- cc
+		dss.handleClientError(err)
 	}
 
-	dss.leaving <- cc
+	dss.leave(cc)
+	fmt.Println("Client connecting ends...")
 }
 
 func (dss *DomainSocketServer) leave(cc *ClientConnection) {
+	fmt.Println("Client disconnecting...")
 	// cleanup resources
 	delete(dss.connections, cc.ID)
 	cc.Close()
 }
 
 func (dss *DomainSocketServer) handleClientError(err error) {
+	fmt.Println("Handling client error...")
 	msg := fmt.Sprintf("Internal Client Error: ")
 	log.Println(pkg.HandleErrorFormat(msg, err))
+	fmt.Println("")
 }
 
 func (dss *DomainSocketServer) Start() error {
 	// Setup Connection
+	fmt.Println("starting up server...")
 	listener, err := net.Listen("unix", dss.Opts.Socket)
 	if err != nil {
 		return pkg.HandleErrorFormat("DomainSocketServer.Listen: Error listening to socket", err)
@@ -135,98 +138,63 @@ func (dss *DomainSocketServer) Start() error {
 		}
 	}(listener, dss)
 
-	// Initiate server listening to communication channels in a seperate goroutine
-	dss.listen()
+	// Echo server
 
-	// Initiate locking while loop to parse new connections and/or leave requests
 	for {
-		// Accept inc connections and handle client errors
+		// Accept connection
 		conn, err := listener.Accept()
 		if err != nil {
-			msg := fmt.Sprintf("DomainSocketServer.Listen: Failed to accept client %s", conn.LocalAddr().String())
-			dss.clientErrors <- pkg.HandleErrorFormat(msg, err)
-		}
-
-		// Instantiate connection
-		newCC := NewClientConnection(conn)
-		dss.joining <- newCC
-	}
-
-	// Locking loop to handle incoming requests and handling channels
-
-	var failedConns []net.Addr
-	var clientCount uint16 = 0
-	for {
-		// Accept inc connections
-		conn, err := listener.Accept()
-		if err != nil {
-			msg := fmt.Sprintf("DomainSocketServer.Listen: Failed to accept client %s", conn.LocalAddr().String())
-			log.Println(pkg.HandleErrorFormat(msg, err))
-			failedConns = append(failedConns, conn.LocalAddr())
+			log.Println(err)
 			continue
 		}
 
-		clientCount += 1
-		fmt.Printf("Client %d JOINED\n", clientCount)
-
-		// Instantiate client connection
-		// create go routine to parse client messages
-		// Handle simple echo server
-		go func(c net.Conn) {
-			defer c.Close()
+		// Handle connection in a goroutine
+		go func(nc net.Conn) {
+			defer nc.Close()
 
 			// Create buffer for incoming data
 			buf := make([]byte, 4096)
 
-			// Read data from connection
-			n, err := c.Read(buf)
+			// read data from connection
+			n, err := nc.Read(buf)
 			if err != nil {
-				// Error from buffer should d/c client not shut down whole server
-				log.Printf(err.Error())
+				log.Println(err)
 				return
 			}
 
-			// Echo data back to the client
-			_, err = conn.Write(buf[:n])
+			// Echo back message to client connection
+			_, err = nc.Write(buf[:n])
 			if err != nil {
-				// Error from buffer should d/c client not shut down whole server
-				log.Printf(err.Error())
-				return
+				log.Println(err)
 			}
 		}(conn)
 	}
-}
 
-func (dss *DomainSocketServer) processFile(filepath string) (string, error) {
-	f, err := os.Open(filepath)
-	// Attempt to open file, handle error, and defer close
-	if err != nil {
-		return "", pkg.HandleErrorFormat(
-			fmt.Sprintf("DomainSocketServer.ProcessFile: Error opening file in \"%s\"", filepath),
-			err,
-		)
-	}
-	defer f.Close()
+	return nil
 
-	// Scan first line as sample, handle error
-	var sb strings.Builder
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		sb.WriteString(scanner.Text())
-	}
-	if err := scanner.Err(); err != nil {
-		return "", pkg.HandleErrorFormat(
-			fmt.Sprintf("DomainSocketServer.ProcessFile: Error Scanning lines for file in \"%s\"", filepath),
-			err,
-		)
-	}
-
-	return sb.String(), nil
+	// // Initiate server listening to communication channels in a seperate goroutine
+	// dss.listen()
+	//
+	// // Initiate locking while loop to parse new connections and/or leave requests
+	// for {
+	// 	// Accept inc connections and handle client errors
+	// 	conn, err := listener.Accept()
+	// 	if err != nil {
+	// 		msg := fmt.Sprintf("DomainSocketServer.Listen: Failed to accept client %s", conn.LocalAddr().String())
+	// 		dss.clientErrors <- pkg.HandleErrorFormat(msg, err)
+	// 	}
+	//
+	// 	// Instantiate connection
+	// 	newCC := NewClientConnection(conn)
+	// 	dss.joining <- newCC
+	// }
 }
 
 func (dss *DomainSocketServer) close() {
 	// Cleanup server and destroy any used resources
-	// Cleanup Socket file
 	fmt.Println("Server cleanup starting")
+	close(dss.joining)
+	close(dss.leaving)
+	close(dss.clientErrors)
 	os.Remove(dss.Opts.Socket)
 }

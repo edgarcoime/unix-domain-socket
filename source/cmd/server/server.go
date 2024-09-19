@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/edgarcoime/domainsocket/internal/pkg"
+	"github.com/edgarcoime/domainsocket/internal/app/server"
 )
 
 func main() {
@@ -16,33 +16,23 @@ func main() {
 	if len(os.Args) < 2 {
 		log.Fatal("Please provide a filepath relative or absolute")
 	}
-	filePath := os.Args[1]
+	// filePath := os.Args[1]
 
-	m, err := pkg.CheckFileExists(filePath)
+	hasCustomSocket := true
+	var opts []server.DSSOptsFunc
+	if hasCustomSocket {
+		opts = append(opts, server.DSSWithSocket("/tmp/mysock.sock"))
+	}
+
+	dss := server.NewDomainSocketServer(opts...)
+	// Debugging
+	currentPath, _ := os.Getwd()
+	fmt.Printf("%+v\n", dss)
+	fmt.Printf("%s\n", currentPath)
+
+	// Activate the server and handle error
+	err := dss.Start()
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	fmt.Println(m)
-
-	// hasCustomSocket := false
-	// var opts []server.DSSOptsFunc
-	// if hasCustomSocket {
-	// 	opts = append(opts, server.DSSWithSocket("/tmp/myCustomSocket"))
-	// }
-	//
-	// // Instantiate server with options
-	// // Input arg functions in server
-	// // Handle any errors from server to user here
-	// dss := server.NewDomainSocketServer(opts...)
-	// // Debugging
-	// fmt.Printf("%+v\n", dss)
-	// currentPath, _ := os.Getwd()
-	// fmt.Printf("%s\n", currentPath)
-	//
-	// // Activate the server
-	// err := dss.Start()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
 }
