@@ -69,7 +69,7 @@ func main() {
 	opts = append(opts, withSocketFile(pkg.StringInputParser(paramSocket)))
 	// Parse required arguments
 	if paramFilename == "" {
-		log.Fatal("Missing required parameter socket (-s), the client needs a path to a file to ask the server about.")
+		log.Fatal("Missing required parameter socket (-f), the client needs a path to a file to ask the server about.")
 	}
 	// Create options struct
 	opts = append(opts, withSocketFile(pkg.StringInputParser(paramSocket)))

@@ -2,12 +2,14 @@ package pkg
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 )
 
-func CheckFileExists(filepath string) (string, error) {
+func CheckTextFileExists(filepath string) (string, error) {
 	f, err := os.Open(filepath)
 	// jattempt to open file, handle error, and defer close
 	defer f.Close()
@@ -19,10 +21,18 @@ func CheckFileExists(filepath string) (string, error) {
 	return msg, nil
 }
 
-func FileExists(filepath string) bool {
-	f, err := os.Open(filepath)
-	defer f.Close()
-	return err == nil
+func CheckFileExists(filepath string) (string, error) {
+	if _, err := os.Stat(filepath); err == nil {
+		// Exists
+		msg := fmt.Sprintf("File exists in %s filepath.", filepath)
+		return msg, nil
+	} else if errors.Is(err, fs.ErrNotExist) {
+		// Does *not* exist
+		return "", err
+	} else {
+		// File may or may not exist. See err for details
+		return "", err
+	}
 }
 
 func ReadTextFileContents(filepath string) (string, error) {
