@@ -3,29 +3,52 @@ package main
 import (
 	"fmt"
 	"log"
-
-	"github.com/edgarcoime/domainsocket/internal/app/server"
-)
-
-const (
-	MAX_CLIENTS = 10
+	"os"
 )
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	fmt.Printf("Server Application\nMax Clients %d\n")
-
-	// Instantiate Domain Socket Server
-	dss, err := server.NewDomainSocketServer()
-	if err != nil {
-		log.Fatal(err)
+	if len(os.Args) < 2 {
+		log.Fatal("Please provide a filepath relative or absolute")
 	}
 
-	fmt.Printf("%s\n", dss.Socket)
+	filepath := os.Args[1]
 
-	// instantiate server
+	fmt.Println()
+	path, _ := os.Getwd()
+	fmt.Printf("%s\n", path)
 
+	contents, err := os.ReadFile(filepath)
+	if err != nil {
+		fmt.Println("File reading error ", err)
+		return
+	}
+
+	fmt.Println("Contents of file: ", string(contents))
+
+	// Process command line args and find out what options are needed
+
+	// Instantiate server with options
+	// Input arg functions in server
+	// Handle any errors from server to user here
+	// dss := server.NewDomainSocketServer()
+
+	// With newly instantiated server listen
+	// Defer cleanup
+	// fmt.Printf("%+v\n", dss)
+
+	// fmt.Println()
+	// path, _ := os.Getwd()
+	// fmt.Printf("%s\n", path)
+
+	// s, err := dss.ProcessFile("~/text.txt")
+	// if err != nil {
+	//	log.Fatal(err)
+	// }
+
+	// fmt.Println(s)
+	// Instantiate Domain Socket Server
 	// Activate server loop to look for connection
 	// -> Any connectinos to the server instantiate a ClientConn struct
 }

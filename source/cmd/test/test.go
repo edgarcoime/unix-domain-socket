@@ -7,8 +7,32 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 )
+
+func main() {
+	fmt.Println("hello world")
+
+	// Open text
+	file, err := os.Open("./text.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Handle file close
+	defer file.Close()
+
+	// Process text
+	// https://www.kelche.co/blog/go/golang-bufio/
+	// https://www.scaler.com/topics/golang/golang-read-file/
+	var sb strings.Builder
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		sb.WriteString(scanner.Text())
+	}
+	fmt.Println(sb.String())
+}
 
 func readFile(fname string) (string, error) {
 	file, err := os.Open("./db/test.txt")
@@ -30,7 +54,7 @@ func readFile(fname string) (string, error) {
 	return "", nil
 }
 
-func main() {
+func test() {
 	// Create a Unix domain socket and listen incoming connections
 	socket, err := net.Listen("unix", "/tmp/echo.sock")
 	if err != nil {
