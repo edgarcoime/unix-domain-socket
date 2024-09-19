@@ -18,17 +18,23 @@ func main() {
 	}
 	filePath := os.Args[1]
 
+	hasCustomSocket := true
+	var opts []server.DSSOptsFunc
+	if hasCustomSocket {
+		opts = append(opts, server.DSSWithSocket("/tmp/myCustomSocket"))
+	}
+
 	// Instantiate server with options
 	// Input arg functions in server
 	// Handle any errors from server to user here
-	dss := server.NewDomainSocketServer()
+	dss := server.NewDomainSocketServer(opts...)
+	// Debugging
+	fmt.Printf("%+v\n", dss)
+	currentPath, _ := os.Getwd()
+	fmt.Printf("%s\n", currentPath)
 
 	// With newly instantiated server listen
 	// Defer cleanup
-	fmt.Printf("%+v\n", dss)
-
-	currentPath, _ := os.Getwd()
-	fmt.Printf("%s\n", currentPath)
 
 	s, err := dss.ProcessFile(filePath)
 	if err != nil {

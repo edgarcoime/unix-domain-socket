@@ -64,9 +64,9 @@ func NewDomainSocketServer(opts ...DSSOptsFunc) *DomainSocketServer {
 
 func (dss *DomainSocketServer) Listen() error {
 	// Setup Connection
-	listener, err := net.Listen("unix", pkg.DEFAULT_SOCKET_FILE)
+	listener, err := net.Listen("unix", dss.Opts.Socket)
 	if err != nil {
-		return err
+		return pkg.HandleErrorFormat("DomainSocketServer.Listen: Error listening to socket", err)
 	}
 
 	// Setup Tear Down
@@ -74,15 +74,21 @@ func (dss *DomainSocketServer) Listen() error {
 	defer func(l net.Listener) {
 		err := l.Close()
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal(pkg.HandleErrorFormat("DomainSocketServer.Listen: Error shutting down listener", err))
 		}
 	}(listener)
 
+	var failedConns []net.Addr
 	for {
 		// Accept inc connections
 		conn, err := listener.Accept()
 		if err != nil {
-			return err
+			// TODO: Should we stop server if client cannot connect?
+			// Move on to next client and try to accept next?
+			msg := fmt.Sprintf("DomainSocketServer.Listen: Failed to accept client %s", conn.LocalAddr().String())
+			log.Println(pkg.HandleErrorFormat(msg, err))
+			failedConns = append(failedConns, conn.LocalAddr())
+			continue
 		}
 
 		fmt.Printf("%+v\n", conn)
@@ -96,7 +102,10 @@ func (dss *DomainSocketServer) ProcessFile(filepath string) (string, error) {
 	f, err := os.Open(filepath)
 	// Attempt to open file, handle error, and defer close
 	if err != nil {
-		return "", fmt.Errorf("\nProcessFile: Error opening file in \"%s\"\nError Details: %w", filepath, err)
+		return "", pkg.HandleErrorFormat(
+			fmt.Sprintf("DomainSocketServer.ProcessFile: Error opening file in \"%s\"", filepath),
+			err,
+		)
 	}
 	defer f.Close()
 
@@ -107,7 +116,10 @@ func (dss *DomainSocketServer) ProcessFile(filepath string) (string, error) {
 		sb.WriteString(scanner.Text())
 	}
 	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("\nProcessFile: Error Scanning lines for file in \"%s\"\nError Details: %w", filepath, err)
+		return "", pkg.HandleErrorFormat(
+			fmt.Sprintf("DomainSocketServer.ProcessFile: Error Scanning lines for file in \"%s\"", filepath),
+			err,
+		)
 	}
 
 	return sb.String(), nil
