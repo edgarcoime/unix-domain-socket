@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"github.com/edgarcoime/domainsocket/internal/pkg"
 )
@@ -82,10 +83,11 @@ func NewDomainSocketServer(opts ...DSSOptsFunc) *DomainSocketServer {
 
 	// Setup Teardown lifeline
 	c := make(chan os.Signal, 1)
-	signal.Notify(c) // Notifies c if os calls signal (no args means everything)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM) // Notifies c if os calls signal (no args means everything)
 	go func(server *DomainSocketServer) {
-		<-c
+		s := <-c
 		fmt.Println("OS Signal interrupt shutting down...")
+		fmt.Println("Got signal: ", s)
 		server.Shutdown()
 		os.Exit(1)
 	}(dss)
@@ -129,7 +131,7 @@ func (dss *DomainSocketServer) join(cc *ClientConnection) {
 			numClients,
 		)
 		cc.WriteToClient(msg)
-		cc.Close()
+		return
 	}
 
 	// Establish client connected
@@ -145,8 +147,8 @@ func (dss *DomainSocketServer) join(cc *ClientConnection) {
 func (dss *DomainSocketServer) leave(cc *ClientConnection) {
 	// cleanup resources
 	defer cc.Close()
-	fmt.Println("Client disconnecting...")
 	delete(dss.connections, cc.ID)
+	fmt.Printf("Client disconnecting...\nNumber of Clients now: %d\n", dss.NumCurrentClients())
 }
 
 func (dss *DomainSocketServer) handleClientError(ccErr *ClientConnectionError) {
@@ -158,8 +160,6 @@ func (dss *DomainSocketServer) handleClientError(ccErr *ClientConnectionError) {
 }
 
 func (dss *DomainSocketServer) Start() error {
-	defer dss.Shutdown()
-
 	fmt.Println("Starting server...")
 
 	// Activate Listener
@@ -195,6 +195,7 @@ func (dss *DomainSocketServer) handleConnections(l net.Listener) {
 			// TODO: how to handle if client does not accept cause infinite loops
 			msg := fmt.Sprintf("DomainSocketServer.handleConnections: Failed to accept client")
 			dss.clientErrors <- CreateCCError(nil, pkg.HandleErrorFormat(msg, err))
+			continue
 		}
 
 		client := NewClientConnection(conn)

@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/edgarcoime/domainsocket/internal/pkg"
 )
@@ -46,6 +47,8 @@ func (cc *ClientConnection) WriteToClient(s string) error {
 func (cc *ClientConnection) ProcessRequest(leaving chan *ClientConnection, errors chan *ClientConnectionError) {
 	fmt.Println("ClientConnection processing request...")
 	buf := make([]byte, 4096)
+
+	time.Sleep(5 * time.Second)
 
 	// NEED n so that null bytes are ommitted when converting to string
 	n, err := cc.Conn.Read(buf)
