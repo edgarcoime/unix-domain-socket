@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/edgarcoime/domainsocket/internal/app/server"
+	"github.com/edgarcoime/domainsocket/internal/pkg"
 )
 
 func main() {
@@ -18,32 +18,31 @@ func main() {
 	}
 	filePath := os.Args[1]
 
-	hasCustomSocket := false
-	var opts []server.DSSOptsFunc
-	if hasCustomSocket {
-		opts = append(opts, server.DSSWithSocket("/tmp/myCustomSocket"))
-	}
-
-	// Instantiate server with options
-	// Input arg functions in server
-	// Handle any errors from server to user here
-	dss := server.NewDomainSocketServer(opts...)
-	// Debugging
-	fmt.Printf("%+v\n", dss)
-	currentPath, _ := os.Getwd()
-	fmt.Printf("%s\n", currentPath)
-
-	// Activate the server
-	err := dss.Activate()
+	m, err := pkg.CheckFileExists(filePath)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	// With newly instantiated server listen
-	// Defer cleanup
+	fmt.Println(m)
 
-	fmt.Println(s)
-	// Instantiate Domain Socket Server
-	// Activate server loop to look for connection
-	// -> Any connectinos to the server instantiate a ClientConn struct
+	// hasCustomSocket := false
+	// var opts []server.DSSOptsFunc
+	// if hasCustomSocket {
+	// 	opts = append(opts, server.DSSWithSocket("/tmp/myCustomSocket"))
+	// }
+	//
+	// // Instantiate server with options
+	// // Input arg functions in server
+	// // Handle any errors from server to user here
+	// dss := server.NewDomainSocketServer(opts...)
+	// // Debugging
+	// fmt.Printf("%+v\n", dss)
+	// currentPath, _ := os.Getwd()
+	// fmt.Printf("%s\n", currentPath)
+	//
+	// // Activate the server
+	// err := dss.Start()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 }
