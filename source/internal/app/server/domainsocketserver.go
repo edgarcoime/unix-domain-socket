@@ -66,7 +66,7 @@ func NewDomainSocketServer(opts ...DSSOptsFunc) *DomainSocketServer {
 		// Handle non-negotiable attributes
 		connections:   make(map[int64]*ClientConnection),
 		joining:       make(chan *ClientConnection), // Incoming clients that need to be processed
-		leaving:       make(chan *ClientConnection), // Outgoing clients that need to be exited
+		leaving:       make(chan *ClientConnection), // Incoming clients that need to be processed
 		clientErrors:  make(chan error),
 		teardownFuncs: []TeardownFunc{},
 	}
@@ -116,37 +116,42 @@ func (dss *DomainSocketServer) listen() {
 	}()
 }
 
+func (dss *DomainSocketServer) NumCurrentClients() int {
+	return len(dss.connections)
+}
+
 func (dss *DomainSocketServer) join(cc *ClientConnection) {
 	fmt.Println("Client connecting...")
-	if len(dss.connections) >= int(dss.Opts.MaxConn) {
+	numClients := dss.NumCurrentClients()
+	if numClients >= int(dss.Opts.MaxConn) {
+		msg := fmt.Sprintf(
+			"Sorry, we are currently at full capacity with %d clients. Please try again later.",
+			numClients,
+		)
+		cc.WriteToClient(msg)
 		cc.Close()
 	}
 
 	// Establish client connected
 	dss.connections[cc.ID] = cc
+	numClients = dss.NumCurrentClients()
+	fmt.Printf("Currently have %d clients...", numClients)
 
-	// Process client request and handle bubble up error
-	err := cc.ProcessRequest()
-	if err != nil {
-		dss.handleClientError(err)
-	}
-
-	dss.leave(cc)
-	fmt.Println("Client connecting ends...")
+	// Goroutine the client request
+	// All communication needs to be done through channels
+	go cc.ProcessRequest(dss.leaving, dss.clientErrors)
 }
 
 func (dss *DomainSocketServer) leave(cc *ClientConnection) {
-	fmt.Println("Client disconnecting...")
 	// cleanup resources
+	defer cc.Close()
+	fmt.Println("Client disconnecting...")
 	delete(dss.connections, cc.ID)
-	cc.Close()
 }
 
 func (dss *DomainSocketServer) handleClientError(err error) {
-	fmt.Println("Handling client error...")
 	msg := fmt.Sprintf("Internal Client Error: ")
 	log.Println(pkg.HandleErrorFormat(msg, err))
-	fmt.Println("")
 }
 
 func (dss *DomainSocketServer) Start() error {
@@ -171,58 +176,32 @@ func (dss *DomainSocketServer) Start() error {
 	}(listener)
 	dss.teardownFuncs = append(dss.teardownFuncs, teardownFunc)
 
-	fmt.Println(len(dss.teardownFuncs))
+	// Activate goroutine to handle All channels
+	dss.listen()
+	// Activate goroutine to handle incoming connections
+	dss.handleConnections(listener)
 
-	// Communication loop for echo server
+	return nil
+}
+
+func (dss *DomainSocketServer) handleConnections(l net.Listener) {
 	for {
 		// Accept connection
-		conn, err := listener.Accept()
+		conn, err := l.Accept()
 		if err != nil {
-			log.Println(err)
-			continue
+			// TODO: how to handle if client does not accept cause infinite loops
+			msg := fmt.Sprintf("DomainSocketServer.handleConnections: Failed to accept client")
+			dss.clientErrors <- pkg.HandleErrorFormat(msg, err)
 		}
 
-		// Handle connection in a goroutine
-		go func(nc net.Conn) {
-			defer nc.Close()
-
-			// Create buffer for incoming data
-			buf := make([]byte, 4096)
-
-			// NEED n so that null bytes are ommitted when converting to string
-			n, err := nc.Read(buf)
-			if err != nil {
-				log.Println(err)
-				return
-			}
-
-			// only Slices can be converted to string not []byte
-			filepath := string(buf[:n])
-
-			// Search for file
-			msg, err := pkg.CheckFileExists(filepath)
-			if err != nil {
-				log.Println(err)
-				msg = "File does not exist. Please check the name and directory."
-			}
-			println("Server Msg: ", msg)
-
-			// convert msg into bytes
-			outgoing := []byte(msg)
-
-			// Echo back message to client connection
-			_, err = nc.Write(outgoing)
-			if err != nil {
-				log.Println(err)
-			}
-		}(conn)
+		client := NewClientConnection(conn)
+		dss.joining <- client
 	}
 }
 
 func (dss *DomainSocketServer) close() {
 	// Cleanup server and destroy any used resources
 	close(dss.joining)
-	close(dss.leaving)
 	close(dss.clientErrors)
 	os.Remove(dss.Opts.Socket)
 }
