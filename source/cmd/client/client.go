@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
 
 	"github.com/edgarcoime/domainsocket/internal/pkg"
 )
@@ -52,20 +51,16 @@ func NewClientOpts(opts ...ClientOptsFunc) *ClientOpts {
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	if len(os.Args) < 3 {
-		log.Fatal("Please provide an active socket to connect to and a valid filepath (relative or absolute)")
-	}
-
 	var paramSocket string
 	var paramFilename string
 
 	flag.StringVar(
 		&paramSocket, "s", DEFAULT_SOCKET_FILE,
-		"s - (socket) A path to the socket file the application will try to bind to.",
+		"A valid path to the socket file that the client will attempt to bind and listen to (ex. \"/tmp/example.sock\").",
 	)
 	flag.StringVar(
 		&paramFilename, "f", DEFAULT_FILEPATH,
-		"f - (file) A path to the file the client will ask the server about.",
+		"A valid path to a file that the client will request the server to check",
 	)
 
 	// Parse flags
@@ -84,7 +79,6 @@ func main() {
 	// establish connection
 	conn, err := net.Dial("unix", clientOptions.SocketFile)
 	if err != nil {
-		log.Fatal(err)
 		log.Fatalf("Failed to connect to the socket: %s", err)
 	}
 	defer conn.Close()
