@@ -96,7 +96,7 @@ func (dss *DomainSocketServer) ProcessFile(filepath string) (string, error) {
 	f, err := os.Open(filepath)
 	// Attempt to open file, handle error, and defer close
 	if err != nil {
-		return "", fmt.Errorf("ProcessFile: Error opening file %s: %w", filepath, err)
+		return "", fmt.Errorf("\nProcessFile: Error opening file in \"%s\"\nError Details: %w", filepath, err)
 	}
 	defer f.Close()
 
@@ -107,7 +107,7 @@ func (dss *DomainSocketServer) ProcessFile(filepath string) (string, error) {
 		sb.WriteString(scanner.Text())
 	}
 	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("ProcessFile: Error scanning lines for file %s: %w", filepath, err)
+		return "", fmt.Errorf("\nProcessFile: Error Scanning lines for file in \"%s\"\nError Details: %w", filepath, err)
 	}
 
 	return sb.String(), nil
