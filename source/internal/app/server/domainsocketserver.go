@@ -69,16 +69,17 @@ func (dss *DomainSocketServer) Listen() error {
 		return pkg.HandleErrorFormat("DomainSocketServer.Listen: Error listening to socket", err)
 	}
 
-	// Setup Tear Down
-	defer dss.Close()
-	defer func(l net.Listener) {
+	// Setup Tear Down function
+	defer func(l net.Listener, s *DomainSocketServer) {
+		s.Close()
 		err := l.Close()
 		if err != nil {
 			log.Fatal(pkg.HandleErrorFormat("DomainSocketServer.Listen: Error shutting down listener", err))
 		}
-	}(listener)
+	}(listener, dss)
 
 	var failedConns []net.Addr
+	var clientCount uint16 = 0
 	for {
 		// Accept inc connections
 		conn, err := listener.Accept()
@@ -91,10 +92,37 @@ func (dss *DomainSocketServer) Listen() error {
 			continue
 		}
 
-		fmt.Printf("%+v\n", conn)
+		clientCount += 1
+		fmt.Printf("Client %d JOINED\n", clientCount)
 
 		// Instantiate client connection
 		// create go routine to parse client messages
+		// Handle simple echo server
+		go func(c net.Conn) {
+			defer c.Close()
+
+			// Create buffer for incoming data
+			buf := make([]byte, 4096)
+
+			// Read data from connection
+			n, err := c.Read(buf)
+			if err != nil {
+				// Error from buffer should d/c client not shut down whole server
+				log.Printf(err.Error())
+				return
+			}
+
+			// Echo data back to the client
+			_, err = conn.Write(buf[:n])
+			if err != nil {
+				// Error from buffer should d/c client not shut down whole server
+				log.Printf(err.Error())
+				return
+			}
+		}(conn)
+
+		fmt.Printf("Client %d LEAVES\n", clientCount)
+		clientCount -= 1
 	}
 }
 
@@ -132,6 +160,7 @@ func (dss *DomainSocketServer) Close() {
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
+		os.Remove(dss.Opts.Socket)
 		os.Exit(1)
 	}()
 }

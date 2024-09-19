@@ -18,7 +18,7 @@ func main() {
 	}
 	filePath := os.Args[1]
 
-	hasCustomSocket := true
+	hasCustomSocket := false
 	var opts []server.DSSOptsFunc
 	if hasCustomSocket {
 		opts = append(opts, server.DSSWithSocket("/tmp/myCustomSocket"))
@@ -32,6 +32,12 @@ func main() {
 	fmt.Printf("%+v\n", dss)
 	currentPath, _ := os.Getwd()
 	fmt.Printf("%s\n", currentPath)
+
+	// Activate the server
+	err := dss.Listen()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// With newly instantiated server listen
 	// Defer cleanup
