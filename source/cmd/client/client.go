@@ -50,8 +50,10 @@ func NewClientOpts(opts ...ClientOptsFunc) *ClientOpts {
 	return &o
 }
 
-func main() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
+func ParseFlags() *ClientOpts {
+	// Parse arguments and user input
+	var paramSocket string
+	var paramFilename string
 
 	// Validate max amount of args
 	if len(os.Args) > MAX_CMD_ARGUMENTS+1 {
@@ -62,12 +64,6 @@ Please supply at least the desired filename to run the program or use the follow
 `, MAX_CMD_ARGUMENTS)
 		log.Fatal(msg)
 	}
-
-	var paramSocket string
-	var paramFilename string
-
-	fmt.Println(len(os.Args))
-	fmt.Println(os.Args)
 
 	flag.StringVar(
 		&paramSocket, "s", DEFAULT_SOCKET_FILE,
@@ -81,25 +77,30 @@ Please supply at least the desired filename to run the program or use the follow
 	// Parse flags
 	flag.Parse()
 	var opts []ClientOptsFunc
-	opts = append(opts, withSocketFile(pkg.StringInputParser(paramSocket)))
-	// Parse required arguments
 	if paramFilename == "" {
 		log.Fatal("Missing required parameter socket (-f), the client needs a path to a file to ask the server about.")
 	}
+
 	// Create options struct
 	opts = append(opts, withSocketFile(pkg.StringInputParser(paramSocket)))
 	opts = append(opts, withFilepath(pkg.StringInputParser(paramFilename)))
-	clientOptions := NewClientOpts(opts...)
+	return NewClientOpts(opts...)
+}
+
+func main() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	opts := ParseFlags()
 
 	// establish connection
-	conn, err := net.Dial("unix", clientOptions.SocketFile)
+	conn, err := net.Dial("unix", opts.SocketFile)
 	if err != nil {
 		log.Fatalf("Failed to connect to the socket: %s", err)
 	}
 	defer conn.Close()
 
 	// Write message to the server
-	outboundMsg := []byte(clientOptions.Filepath)
+	outboundMsg := []byte(opts.Filepath)
 	_, err = conn.Write(outboundMsg)
 	if err != nil {
 		log.Fatalf("Failed to write to the socket: %s", err)

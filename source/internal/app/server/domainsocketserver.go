@@ -20,26 +20,26 @@ const (
 type DSSOptsFunc func(*DomainSocketServerOpts)
 
 type DomainSocketServerOpts struct {
-	MaxConn uint
-	Socket  string
+	MaxClients uint
+	SocketFile string
 }
 
 func defaultOpts() DomainSocketServerOpts {
 	return DomainSocketServerOpts{
-		MaxConn: DEFAULT_MAX_CLIENTS,
-		Socket:  DEFAULT_SOCKET_FILE,
+		MaxClients: DEFAULT_MAX_CLIENTS,
+		SocketFile: DEFAULT_SOCKET_FILE,
 	}
 }
 
-func DSSWithMaxConn(n uint) DSSOptsFunc {
+func DSSWithMaxClients(n uint) DSSOptsFunc {
 	return func(opts *DomainSocketServerOpts) {
-		opts.MaxConn = n
+		opts.MaxClients = n
 	}
 }
 
-func DSSWithSocket(s string) DSSOptsFunc {
+func DSSWithSocketFile(s string) DSSOptsFunc {
 	return func(opts *DomainSocketServerOpts) {
-		opts.Socket = s
+		opts.SocketFile = s
 	}
 }
 
@@ -95,75 +95,11 @@ func NewDomainSocketServer(opts ...DSSOptsFunc) *DomainSocketServer {
 	return dss
 }
 
-func (dss *DomainSocketServer) Shutdown() {
-	// Shutdown in reverse order
-	for i := len(dss.teardownFuncs) - 1; i >= 0; i-- {
-		dss.teardownFuncs[i](dss)
-	}
-}
-
-func (dss *DomainSocketServer) listen() {
-	// Goroutine responsible for handling any clients coming in through the channels
-	go func() {
-		for {
-			select {
-			case conn := <-dss.joining:
-				dss.join(conn)
-			case conn := <-dss.leaving:
-				dss.leave(conn)
-			case err := <-dss.clientErrors:
-				dss.handleClientError(err)
-			}
-		}
-	}()
-}
-
-func (dss *DomainSocketServer) NumCurrentClients() int {
-	return len(dss.connections)
-}
-
-func (dss *DomainSocketServer) join(cc *ClientConnection) {
-	fmt.Println("Client connecting...")
-	numClients := dss.NumCurrentClients()
-	if numClients >= int(dss.Opts.MaxConn) {
-		msg := fmt.Sprintf(
-			"Sorry, we are currently at full capacity with %d clients. Please try again later.",
-			numClients,
-		)
-		cc.WriteToClient(msg)
-		return
-	}
-
-	// Establish client connected
-	dss.connections[cc.ID] = cc
-	numClients = dss.NumCurrentClients()
-	fmt.Printf("Currently have %d clients...", numClients)
-
-	// Goroutine the client request
-	// All communication needs to be done through channels
-	go cc.ProcessRequest(dss.leaving, dss.clientErrors)
-}
-
-func (dss *DomainSocketServer) leave(cc *ClientConnection) {
-	// cleanup resources
-	defer cc.Close()
-	delete(dss.connections, cc.ID)
-	fmt.Printf("Client disconnecting...\nNumber of Clients now: %d\n", dss.NumCurrentClients())
-}
-
-func (dss *DomainSocketServer) handleClientError(ccErr *ClientConnectionError) {
-	fmt.Printf("%+v\n", ccErr.CC)
-	fmt.Printf("num: %d\n", len(dss.leaving))
-
-	msg := fmt.Sprintf("Internal Client Error: ")
-	log.Println(pkg.HandleErrorFormat(msg, ccErr.Error))
-}
-
 func (dss *DomainSocketServer) Start() error {
 	fmt.Println("Starting server...")
 
 	// Activate Listener
-	listener, err := net.Listen("unix", dss.Opts.Socket)
+	listener, err := net.Listen("unix", dss.Opts.SocketFile)
 	if err != nil {
 		log.Fatalf("Error occured during net.Listen: %s\n", err)
 	}
@@ -187,6 +123,22 @@ func (dss *DomainSocketServer) Start() error {
 	return nil
 }
 
+func (dss *DomainSocketServer) listen() {
+	// Goroutine responsible for handling any clients coming in through the channels
+	go func() {
+		for {
+			select {
+			case conn := <-dss.joining:
+				dss.join(conn)
+			case conn := <-dss.leaving:
+				dss.leave(conn)
+			case err := <-dss.clientErrors:
+				dss.handleClientError(err)
+			}
+		}
+	}()
+}
+
 func (dss *DomainSocketServer) handleConnections(l net.Listener) {
 	for {
 		// Accept connection
@@ -194,7 +146,7 @@ func (dss *DomainSocketServer) handleConnections(l net.Listener) {
 		if err != nil {
 			// TODO: how to handle if client does not accept cause infinite loops
 			msg := fmt.Sprintf("DomainSocketServer.handleConnections: Failed to accept client")
-			dss.clientErrors <- CreateCCError(nil, pkg.HandleErrorFormat(msg, err))
+			dss.clientErrors <- NewCCError(nil, pkg.HandleErrorFormat(msg, err))
 			continue
 		}
 
@@ -203,9 +155,58 @@ func (dss *DomainSocketServer) handleConnections(l net.Listener) {
 	}
 }
 
+func (dss *DomainSocketServer) join(cc *ClientConnection) {
+	fmt.Println("Client connecting...")
+	numClients := dss.NumCurrentClients()
+	if numClients >= int(dss.Opts.MaxClients) {
+		msg := fmt.Sprintf(
+			"Sorry, we are currently at full capacity with %d clients. Please try again later.",
+			numClients,
+		)
+		cc.WriteToClient(msg)
+		return
+	}
+
+	// Establish client connected
+	dss.connections[cc.ID] = cc
+	numClients = dss.NumCurrentClients()
+	fmt.Printf("Currently have %d clients...", numClients)
+
+	// Goroutine the client request
+	// All communication needs to be done through channels
+	go cc.ProcessRequest(dss.leaving, dss.clientErrors)
+}
+
+func (dss *DomainSocketServer) leave(cc *ClientConnection) {
+	// cleanup client resources
+	defer cc.Close()
+	delete(dss.connections, cc.ID)
+	fmt.Printf("Client disconnecting...\nNumber of Clients now: %d\n", dss.NumCurrentClients())
+}
+
+func (dss *DomainSocketServer) handleClientError(ccErr *ClientConnectionError) {
+	fmt.Printf("%+v\n", ccErr.CC)
+	fmt.Printf("num: %d\n", len(dss.leaving))
+
+	msg := fmt.Sprintf("Internal Client Error: ")
+	log.Println(pkg.HandleErrorFormat(msg, ccErr.Error))
+}
+
 func (dss *DomainSocketServer) close() {
 	// Cleanup server and destroy any used resources
 	close(dss.joining)
+	close(dss.leaving)
 	close(dss.clientErrors)
-	os.Remove(dss.Opts.Socket)
+	os.Remove(dss.Opts.SocketFile)
+}
+
+func (dss *DomainSocketServer) Shutdown() {
+	// Shutdown in reverse order
+	for i := len(dss.teardownFuncs) - 1; i >= 0; i-- {
+		dss.teardownFuncs[i](dss)
+	}
+}
+
+func (dss *DomainSocketServer) NumCurrentClients() int {
+	return len(dss.connections)
 }

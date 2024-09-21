@@ -13,7 +13,7 @@ type ClientConnectionError struct {
 	Error error
 }
 
-func CreateCCError(cc *ClientConnection, err error) *ClientConnectionError {
+func NewCCError(cc *ClientConnection, err error) *ClientConnectionError {
 	return &ClientConnectionError{
 		CC:    cc,
 		Error: err,
@@ -55,7 +55,7 @@ func (cc *ClientConnection) ProcessRequest(leaving chan *ClientConnection, error
 	if err != nil {
 		cc.WriteToClient("Could not read incoming message.")
 		msg := "ClientConnection.ProcessRequest: Could not read client message through buffer."
-		errors <- CreateCCError(cc, pkg.HandleErrorFormat(msg, err))
+		errors <- NewCCError(cc, pkg.HandleErrorFormat(msg, err))
 	}
 
 	// Only slices can be converted to string not []byte
@@ -66,14 +66,14 @@ func (cc *ClientConnection) ProcessRequest(leaving chan *ClientConnection, error
 	if err != nil {
 		cc.WriteToClient(fmt.Sprintf("File does not exist or given invalid path. Please check path given."))
 		msg := fmt.Sprintf("ClientConnection.ProcessRequest: File does not exist or invalid name.")
-		errors <- CreateCCError(cc, pkg.HandleErrorFormat(msg, err))
+		errors <- NewCCError(cc, pkg.HandleErrorFormat(msg, err))
 	}
 
 	// Echo message back to user
 	err = cc.WriteToClient(m)
 	if err != nil {
 		cc.WriteToClient("Could not write back to respond.")
-		errors <- CreateCCError(cc, err)
+		errors <- NewCCError(cc, err)
 	}
 
 	fmt.Println(m)

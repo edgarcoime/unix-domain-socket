@@ -17,24 +17,24 @@ const (
 )
 
 type ServerParams struct {
-	socketFile string
-	maxClients uint
+	SocketFile string
+	MaxClients uint
 }
 
 func NewServerParams() *ServerParams {
 	return &ServerParams{
-		socketFile: DEFAULT_SOCKET_FILE,
-		maxClients: DEFAULT_MAX_CLIENTS,
+		SocketFile: DEFAULT_SOCKET_FILE,
+		MaxClients: DEFAULT_MAX_CLIENTS,
 	}
 }
 
 func (sp *ServerParams) SetSocketFile(s string) *ServerParams {
-	sp.socketFile = s
+	sp.SocketFile = s
 	return sp
 }
 
 func (sp *ServerParams) SetMaxClient(n uint) *ServerParams {
-	sp.maxClients = n
+	sp.MaxClients = n
 	return sp
 }
 
@@ -68,8 +68,8 @@ You do not need to supply a flag to run the program but look at the -h docs to c
 	// Manage optional params
 	serverOptions := NewServerParams().SetSocketFile(paramSocket).SetMaxClient(paramMaxClient)
 	var dssOpts []server.DSSOptsFunc
-	dssOpts = append(dssOpts, server.DSSWithSocket(serverOptions.socketFile))
-	dssOpts = append(dssOpts, server.DSSWithMaxConn(serverOptions.maxClients))
+	dssOpts = append(dssOpts, server.DSSWithSocketFile(serverOptions.SocketFile))
+	dssOpts = append(dssOpts, server.DSSWithMaxClients(serverOptions.MaxClients))
 
 	// Create and start server
 	dss := server.NewDomainSocketServer(dssOpts...)
@@ -77,7 +77,7 @@ You do not need to supply a flag to run the program but look at the -h docs to c
 	Socketfile: %s
 	MaxClients: %d
 Listening to requests now...`
-	fmt.Printf(msg, dss.Opts.Socket, dss.Opts.MaxConn)
+	fmt.Printf(msg, dss.Opts.SocketFile, dss.Opts.MaxClients)
 	fmt.Println("")
 	err := dss.Start()
 	if err != nil {
