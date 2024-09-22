@@ -20,4 +20,4 @@ go build -o bin/ ./cmd/server/
 # compile client
 go build -o bin/ ./cmd/client/
 
-echo "Compilation complete. Client and Server programs are in the binaries/ folder."
+echo "Compilation complete. Client and Server programs are in the bin/ folder."
