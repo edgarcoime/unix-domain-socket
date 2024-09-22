@@ -92,6 +92,13 @@ func main() {
 
 	opts := ParseFlags()
 
+	msg := `Starting up Client with the following configurations:
+	Socketfile: %s
+	Filepath: %s
+Attempting to connect to server now...`
+	fmt.Printf(msg, opts.SocketFile, opts.Filepath)
+	fmt.Println("")
+
 	// establish connection
 	conn, err := net.Dial("unix", opts.SocketFile)
 	if err != nil {

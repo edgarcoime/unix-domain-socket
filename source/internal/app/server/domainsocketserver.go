@@ -86,7 +86,7 @@ func NewDomainSocketServer(opts ...DSSOptsFunc) *DomainSocketServer {
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM) // Notifies c if os calls signal (no args means everything)
 	go func(server *DomainSocketServer) {
 		s := <-c
-		fmt.Println("OS Signal interrupt shutting down...")
+		fmt.Println("OS Signal detected shutting down...")
 		fmt.Println("Got signal: ", s)
 		server.Shutdown()
 		os.Exit(1)
@@ -96,8 +96,6 @@ func NewDomainSocketServer(opts ...DSSOptsFunc) *DomainSocketServer {
 }
 
 func (dss *DomainSocketServer) Start() error {
-	fmt.Println("Starting server...")
-
 	// Activate Listener
 	listener, err := net.Listen("unix", dss.Opts.SocketFile)
 	if err != nil {
@@ -185,9 +183,6 @@ func (dss *DomainSocketServer) leave(cc *ClientConnection) {
 }
 
 func (dss *DomainSocketServer) handleClientError(ccErr *ClientConnectionError) {
-	fmt.Printf("%+v\n", ccErr.CC)
-	fmt.Printf("num: %d\n", len(dss.leaving))
-
 	msg := fmt.Sprintf("Internal Client Error: ")
 	log.Println(pkg.HandleErrorFormat(msg, ccErr.Error))
 }

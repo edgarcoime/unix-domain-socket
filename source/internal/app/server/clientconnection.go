@@ -3,7 +3,6 @@ package server
 import (
 	"fmt"
 	"net"
-	"time"
 
 	"github.com/edgarcoime/domainsocket/internal/pkg"
 )
@@ -45,10 +44,13 @@ func (cc *ClientConnection) WriteToClient(s string) error {
 }
 
 func (cc *ClientConnection) ProcessRequest(leaving chan *ClientConnection, errors chan *ClientConnectionError) {
+	// Defer leaving in case return early
+	defer func() {
+		leaving <- cc
+	}()
+
 	fmt.Println("ClientConnection processing request...")
 	buf := make([]byte, 4096)
-
-	time.Sleep(5 * time.Second)
 
 	// NEED n so that null bytes are ommitted when converting to string
 	n, err := cc.Conn.Read(buf)
@@ -56,6 +58,7 @@ func (cc *ClientConnection) ProcessRequest(leaving chan *ClientConnection, error
 		cc.WriteToClient("Could not read incoming message.")
 		msg := "ClientConnection.ProcessRequest: Could not read client message through buffer."
 		errors <- NewCCError(cc, pkg.HandleErrorFormat(msg, err))
+		return
 	}
 
 	// Only slices can be converted to string not []byte
@@ -67,6 +70,7 @@ func (cc *ClientConnection) ProcessRequest(leaving chan *ClientConnection, error
 		cc.WriteToClient(fmt.Sprintf("File does not exist or given invalid path. Please check path given."))
 		msg := fmt.Sprintf("ClientConnection.ProcessRequest: File does not exist or invalid name.")
 		errors <- NewCCError(cc, pkg.HandleErrorFormat(msg, err))
+		return
 	}
 
 	// Echo message back to user
@@ -74,11 +78,11 @@ func (cc *ClientConnection) ProcessRequest(leaving chan *ClientConnection, error
 	if err != nil {
 		cc.WriteToClient("Could not write back to respond.")
 		errors <- NewCCError(cc, err)
+		return
 	}
 
 	fmt.Println(m)
 	fmt.Println("ClientConnection processing request concluding...")
-	leaving <- cc
 }
 
 func (cc *ClientConnection) Close() {
