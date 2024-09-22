@@ -6,6 +6,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/edgarcoime/domainsocket/internal/pkg"
 )
@@ -104,21 +106,37 @@ Attempting to connect to server now...`
 	if err != nil {
 		log.Fatalf("Failed to connect to the socket: %s", err)
 	}
-	defer conn.Close()
 
+	// intercept os signal cleanup functions
+	// REMEMBER IF THERE IS AN OS EXIT YOU MUST SET THIS UP
+	os_c := make(chan os.Signal, 1)
+	signal.Notify(os_c, syscall.SIGINT, syscall.SIGTERM)
+	defer conn.Close()
+	go func(c net.Conn) {
+		s := <-os_c
+		fmt.Println("Sig call shutdown")
+		fmt.Println("Os signal: ", s)
+		c.Close()
+		os.Exit(1)
+	}(conn)
+
+	fmt.Println("writing start")
 	// Write message to the server
 	outboundMsg := []byte(opts.Filepath)
 	_, err = conn.Write(outboundMsg)
 	if err != nil {
 		log.Fatalf("Failed to write to the socket: %s", err)
 	}
+	fmt.Println("writing end")
 
+	fmt.Println("reading start")
 	// Read inbound message from the server
 	buf := make([]byte, 4096)
 	n, err := conn.Read(buf)
 	if err != nil {
 		log.Fatalf("Failed to read from socket: %s", err)
 	}
+	fmt.Println("reading end")
 
 	inboundMsg := string(buf[:n])
 	fmt.Printf("Server Response: %s\n", inboundMsg)
