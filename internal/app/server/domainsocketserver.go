@@ -66,8 +66,8 @@ func NewDomainSocketServer(opts ...DSSOptsFunc) *DomainSocketServer {
 		Opts: o,
 		// Handle non-negotiable attributes
 		connections:   make(map[int64]*ClientConnection),
-		joining:       make(chan *ClientConnection), // Incoming clients that need to be processed
-		leaving:       make(chan *ClientConnection), // Incoming clients that need to be processed
+		joining:       make(chan *ClientConnection),
+		leaving:       make(chan *ClientConnection),
 		clientErrors:  make(chan *ClientConnectionError),
 		teardownFuncs: []TeardownFunc{},
 	}
@@ -85,7 +85,7 @@ func NewDomainSocketServer(opts ...DSSOptsFunc) *DomainSocketServer {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM) // Notifies c if os calls signal (no args means everything)
 	go func(server *DomainSocketServer) {
-		s := <-c
+		s := <-c // Blocking call. Cleanup will only be called if something is sent to c chan
 		fmt.Println("OS Signal detected shutting down...")
 		fmt.Println("Got signal: ", s)
 		server.Shutdown()
