@@ -14,20 +14,23 @@ import (
 const (
 	DEFAULT_MAX_CLIENTS = pkg.DEFAULT_MAX_CLIENTS
 	DEFAULT_SOCKET_FILE = pkg.DEFAULT_SOCKET_FILE
+	SERVER_TYPE         = pkg.SERVER_TYPE
 )
 
 // DEFAULTS FOR DOMAINSOCKETSERVER CONSTRUCTOR
 type DSSOptsFunc func(*DomainSocketServerOpts)
 
 type DomainSocketServerOpts struct {
+	Address    string
+	Port       string
 	MaxClients uint
-	SocketFile string
 }
 
 func defaultOpts() DomainSocketServerOpts {
 	return DomainSocketServerOpts{
+		Address:    "",
+		Port:       "",
 		MaxClients: DEFAULT_MAX_CLIENTS,
-		SocketFile: DEFAULT_SOCKET_FILE,
 	}
 }
 
@@ -37,9 +40,15 @@ func DSSWithMaxClients(n uint) DSSOptsFunc {
 	}
 }
 
-func DSSWithSocketFile(s string) DSSOptsFunc {
+func DSSWithAddress(s string) DSSOptsFunc {
 	return func(opts *DomainSocketServerOpts) {
-		opts.SocketFile = s
+		opts.Address = s
+	}
+}
+
+func DSSWithPort(s string) DSSOptsFunc {
+	return func(opts *DomainSocketServerOpts) {
+		opts.Port = s
 	}
 }
 
@@ -97,7 +106,13 @@ func NewDomainSocketServer(opts ...DSSOptsFunc) *DomainSocketServer {
 
 func (dss *DomainSocketServer) Start() error {
 	// Activate Listener
-	listener, err := net.Listen("unix", dss.Opts.SocketFile)
+	fullAddr := fmt.Sprintf("%s:%s", dss.Opts.Address, dss.Opts.Port)
+	tcpAddr, err := net.ResolveTCPAddr(SERVER_TYPE, fullAddr)
+	if err != nil {
+		log.Fatalf("Invalid Address format please check address format of the following: %#v\n%s\n", tcpAddr, err)
+	}
+
+	listener, err := net.ListenTCP(SERVER_TYPE, tcpAddr)
 	if err != nil {
 		log.Fatalf("Error occured during net.Listen: %s\n", err)
 	}
@@ -113,10 +128,13 @@ func (dss *DomainSocketServer) Start() error {
 	}(listener)
 	dss.teardownFuncs = append(dss.teardownFuncs, teardownFunc)
 
-	// Activate goroutine to handle All channels
-	dss.listen()
-	// Activate goroutine to handle incoming connections
-	dss.handleConnections(listener)
+	fmt.Printf("TCP Addr: %+v\n", tcpAddr)
+	fmt.Printf("DSS: %+v\n", dss)
+
+	// // Activate goroutine to handle All channels
+	// dss.listen()
+	// // Activate goroutine to handle incoming connections
+	// dss.handleConnections(listener)
 
 	return nil
 }
@@ -192,7 +210,6 @@ func (dss *DomainSocketServer) close() {
 	close(dss.joining)
 	close(dss.leaving)
 	close(dss.clientErrors)
-	os.Remove(dss.Opts.SocketFile)
 }
 
 func (dss *DomainSocketServer) Shutdown() {

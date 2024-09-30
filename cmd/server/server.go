@@ -11,25 +11,32 @@ import (
 )
 
 const (
-	DEFAULT_SOCKET_FILE = pkg.DEFAULT_SOCKET_FILE
 	DEFAULT_MAX_CLIENTS = pkg.DEFAULT_MAX_CLIENTS
 	MAX_CMD_ARGUMENTS   = 4
+	TYPE                = pkg.SERVER_TYPE
 )
 
 type ServerParams struct {
-	SocketFile string
 	MaxClients uint
+	Port       string
+	Address    string
 }
 
 func NewServerParams() *ServerParams {
 	return &ServerParams{
-		SocketFile: DEFAULT_SOCKET_FILE,
 		MaxClients: DEFAULT_MAX_CLIENTS,
+		Port:       "",
+		Address:    "",
 	}
 }
 
-func (sp *ServerParams) SetSocketFile(s string) *ServerParams {
-	sp.SocketFile = s
+func (sp *ServerParams) SetAddress(s string) *ServerParams {
+	sp.Address = s
+	return sp
+}
+
+func (sp *ServerParams) SetPort(s string) *ServerParams {
+	sp.Port = s
 	return sp
 }
 
@@ -50,34 +57,47 @@ You do not need to supply a flag to run the program but look at the -h docs to c
 		log.Fatal(msg)
 	}
 
-	// Set flags
-	var paramSocket string
+	// Set Connection Type flags
+	var paramAddress string
+	var paramPort string
+
+	// Set Server Flags
 	var paramMaxClient uint
 
 	// Parse flags
 	flag.StringVar(
-		&paramSocket, "s", DEFAULT_SOCKET_FILE,
-		"A valid path to the socket file the server will bind and listen to (ex. \"/tmp/example.sock\").",
+		&paramAddress, "a", "",
+		// NOTE: Check if need to say valid ip address
+		"A valid address the server will bind and listen to. Otherwise will default to local port",
+	)
+	flag.StringVar(
+		&paramPort, "p", "",
+		"A valid port the server will bind and listen to.",
 	)
 	flag.UintVar(
 		&paramMaxClient, "n", DEFAULT_MAX_CLIENTS,
 		"The number of client connections the server will simultaneously handle.",
 	)
 	flag.Parse()
+	if paramPort == "" {
+		log.Fatal("Missing required parameter port (-p), The server needs a port to listen to.")
+	}
 
 	// Manage optional params
-	serverOptions := NewServerParams().SetSocketFile(paramSocket).SetMaxClient(paramMaxClient)
+	serverOptions := NewServerParams().SetAddress(paramAddress).SetPort(paramPort).SetMaxClient(paramMaxClient)
 	var dssOpts []server.DSSOptsFunc
-	dssOpts = append(dssOpts, server.DSSWithSocketFile(serverOptions.SocketFile))
+	dssOpts = append(dssOpts, server.DSSWithAddress(serverOptions.Address))
+	dssOpts = append(dssOpts, server.DSSWithPort(serverOptions.Port))
 	dssOpts = append(dssOpts, server.DSSWithMaxClients(serverOptions.MaxClients))
 
 	// Create and start server
 	dss := server.NewDomainSocketServer(dssOpts...)
 	msg := `Starting up Domain Socket Server with the following configurations:
-	Socketfile: %s
+	Address: %s
+	Port: %s
 	MaxClients: %d
 Listening to requests now...`
-	fmt.Printf(msg, dss.Opts.SocketFile, dss.Opts.MaxClients)
+	fmt.Printf(msg, dss.Opts.Address, dss.Opts.Port, dss.Opts.MaxClients)
 	fmt.Println("")
 	err := dss.Start()
 	if err != nil {
