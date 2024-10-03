@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/edgarcoime/domainsocket/internal/pkg"
@@ -17,66 +18,66 @@ const (
 )
 
 type ServerConnection struct {
-	LocalAddr  *net.TCPAddr
-	RemoteAddr *net.TCPAddr
-	Conn       *net.TCPConn
-	Filepath   string
+	Conn     *net.TCPConn
+	Filepath string
+	Reader   *bufio.Reader
+	Writer   *bufio.Writer
+	wg       sync.WaitGroup
 }
 
-func NewServerConnection(r *net.TCPAddr, fp string) *ServerConnection {
-	return &ServerConnection{
-		LocalAddr:  nil,
-		RemoteAddr: r,
-		Conn:       nil,
-		Filepath:   fp,
-	}
-}
+func NewServerConnection(c *net.TCPConn, fp string) *ServerConnection {
+	reader := bufio.NewReader(c)
+	writer := bufio.NewWriter(c)
 
-func (sc *ServerConnection) Start() {
-	// Attempt connection
-	var localAddr *net.TCPAddr = nil
-	conn, err := net.DialTCP(CONN_TYPE, localAddr, sc.RemoteAddr)
-	if err != nil {
-		log.Fatalf("Error occured during net.DialTCP: \nPlease check the remote address (%s).\n%s\n", sc.RemoteAddr, err)
+	sc := &ServerConnection{
+		Conn:     c,
+		Filepath: fp,
+		Reader:   reader,
+		Writer:   writer,
+		// Don't need to add wg
 	}
-
-	sc.LocalAddr = localAddr
-	sc.Conn = conn
 
 	// REMEMBER IF THERE IS AN OS EXIT YOU MUST SET THIS UP
 	os_c := make(chan os.Signal, 1)
 	signal.Notify(os_c, syscall.SIGINT, syscall.SIGTERM)
-	go func(c net.Conn) {
+	go func() {
 		s := <-os_c
 		fmt.Println("Sig call shutdown")
 		fmt.Println("Os signal: ", s)
 		sc.Close()
 		os.Exit(1)
-	}(conn)
+	}()
+
+	return sc
 }
 
 func (sc *ServerConnection) Close() {
+	fmt.Println("Shutting down client...")
 	sc.Conn.Close()
-	print("closing")
 }
 
-func (sc *ServerConnection) ProcessRequest() {
-	// CONNECTED TO SERVER NOW
+func (sc *ServerConnection) Start() {
 	defer sc.Close()
+
+	sc.wg.Add(2)
+	go sc.sendFile()
+	go sc.receiveMsg()
+	sc.wg.Wait()
+}
+
+func (sc *ServerConnection) sendFile() {
+	defer sc.wg.Done() // Mark work as done
+	// Open file
 	file, err := os.Open(sc.Filepath)
 	if err != nil {
 		log.Fatalf("Failed to open file: %v", err)
 	}
 	defer file.Close()
 
-	fmt.Println("found file")
-
 	fileReader := bufio.NewReader(file)
-	writer := bufio.NewWriter(sc.Conn)
-	// reader := bufio.NewReader(sc.Conn)
 
 	// Create first packet
-	_, err = writer.WriteString(sc.Filepath + "\n")
+	_, err = sc.Writer.WriteString(sc.Filepath + "\n")
 	if err != nil {
 		log.Fatalf("Could not send header for the packets to the server\n")
 	}
@@ -88,7 +89,7 @@ func (sc *ServerConnection) ProcessRequest() {
 			if err.Error() == "EOF" {
 				if len(line) > 0 {
 					// send last line if doesn't work with new line
-					_, writeErr := writer.WriteString(line)
+					_, writeErr := sc.Writer.WriteString(line)
 					if writeErr != nil {
 						log.Printf("Error sending last line: %v\n", writeErr)
 						break
@@ -100,15 +101,19 @@ func (sc *ServerConnection) ProcessRequest() {
 		}
 
 		// Send the line to the server
-		_, err = writer.WriteString(line)
+		_, err = sc.Writer.WriteString(line)
 		if err != nil {
 			log.Fatalf("Error sending data: %v\n", err)
 		}
 
 		// Flush the buffered data to ensure it's sent immediately
-		err = writer.Flush()
+		err = sc.Writer.Flush()
 		if err != nil {
 			log.Fatalf("Error flushing data: %v\n", err)
 		}
 	}
+}
+
+func (sc *ServerConnection) receiveMsg() {
+	defer sc.wg.Done()
 }

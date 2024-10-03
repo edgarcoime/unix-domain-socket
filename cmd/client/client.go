@@ -128,7 +128,13 @@ Attempting to connect to server now...`
 		log.Fatalf("Invalid Address format please check address format of the following: %#v\n%s\n", fullAddr, err)
 	}
 
-	sc := client.NewServerConnection(remoteAddr, opts.Filepath)
+	// Attempt connection
+	var localAddr *net.TCPAddr = nil
+	conn, err := net.DialTCP(CONN_TYPE, localAddr, remoteAddr)
+	if err != nil {
+		log.Fatalf("Error occured during net.DialTCP: \nPlease check the remote address (%s).\n%s\n", remoteAddr, err)
+	}
+
+	sc := client.NewServerConnection(conn, opts.Filepath)
 	sc.Start()
-	sc.ProcessRequest()
 }
