@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"log"
@@ -102,43 +103,75 @@ func (sc *ServerConnection) Start() {
 }
 
 func (sc *ServerConnection) Close() {
-	sc.Close()
+	sc.Conn.Close()
+	print("closing")
 }
 
 func (sc *ServerConnection) ProcessRequest() {
 	// CONNECTED TO SERVER NOW
+	defer sc.Close()
 	file, err := os.Open(sc.Filepath)
 	if err != nil {
 		log.Fatalf("Failed to open file: %v", err)
 	}
 	defer file.Close()
 
-	// Read file
-	content, err := pkg.ReadTextFileContents(sc.Filepath)
-	if err != nil {
-		log.Fatalf("Failed to read and open the file at path: %s\n", sc.Filepath)
-	}
+	fmt.Println("found file")
+
+	fileReader := bufio.NewReader(file)
+	connWriter := bufio.NewWriter(sc.Conn)
 
 	// Loop through chunks of the file and send chunks to the server
+	for {
+		line, err := fileReader.ReadString('\n')
+		if err != nil {
+			if err.Error() == "EOF" {
+				if len(line) > 0 {
+					// send last line if doesn't work with new line
+					_, writeErr := connWriter.WriteString(line)
+					if writeErr != nil {
+						log.Printf("Error sending last line: %v", writeErr)
+						break
+					}
+				}
+				break
+			}
+			log.Fatalf("Error reading the file: %s", err)
+		}
+
+		// Send the line to the server
+		_, err = connWriter.WriteString(line)
+		if err != nil {
+			log.Fatalf("Error sending data: %v", err)
+		}
+
+		// Flush the buffered data to ensure it's sent immediately
+		err = connWriter.Flush()
+		if err != nil {
+			log.Fatalf("Error flushing data: %v", err)
+		}
+	}
+
+	// send line to server
 
 	// Write message to the server
-	outboundMsg := []byte(content)
-	_, err = sc.Conn.Write(outboundMsg)
-	if err != nil {
-		log.Fatalf("Failed to write to the socket: %s\n", err)
-	}
-
-	// Read inbound message from the server
-	buf := make([]byte, 4096)
-	n, err := sc.Conn.Read(buf)
-	if err != nil {
-		log.Fatalf("Failed to read from socket: %s\n", err)
-	}
-
-	buf.len
-
-	inboundMsg := string(buf[:n])
-	fmt.Printf("Server Response: %s\n", inboundMsg)
+	// outboundMsg := []byte(content)
+	// _, err = sc.Conn.Write(outboundMsg)
+	// if err != nil {
+	// 	log.Fatalf("Failed to write to the socket: %s\n", err)
+	// }
+	//
+	// // Read inbound message from the server
+	// buf := make([]byte, 4096)
+	// n, err := sc.Conn.Read(buf)
+	// if err != nil {
+	// 	log.Fatalf("Failed to read from socket: %s\n", err)
+	// }
+	//
+	// buf.len
+	//
+	// inboundMsg := string(buf[:n])
+	// fmt.Printf("Server Response: %s\n", inboundMsg)
 }
 
 func ParseFlags() *ClientOpts {
