@@ -166,7 +166,7 @@ func (dss *DomainSocketServer) handleConnections(l net.Listener) {
 			continue
 		}
 
-		client := NewClientConnection(conn)
+		client := NewClientConnection(conn, dss)
 		dss.joining <- client
 	}
 }
@@ -190,12 +190,12 @@ func (dss *DomainSocketServer) join(cc *ClientConnection) {
 
 	// Goroutine the client request
 	// All communication needs to be done through channels
-	go cc.ProcessRequest(dss.leaving, dss.clientErrors)
+	// go cc.ProcessRequest(dss.leaving, dss.clientErrors)
+	go cc.Start()
 }
 
 func (dss *DomainSocketServer) leave(cc *ClientConnection) {
 	// cleanup client resources
-	defer cc.Close()
 	delete(dss.connections, cc.ID)
 	fmt.Printf("Client disconnecting...\nNumber of Clients now: %d\n", dss.NumCurrentClients())
 }

@@ -29,14 +29,22 @@ func NewCCError(cc *ClientConnection, err error) *ClientConnectionError {
 }
 
 type ClientConnection struct {
-	ID   int64
-	Conn net.Conn
+	ID         int64
+	Conn       net.Conn
+	incoming   chan string
+	outgoing   chan string
+	disconnect chan bool
+	server     *DomainSocketServer
 }
 
-func NewClientConnection(conn net.Conn) *ClientConnection {
+func NewClientConnection(conn net.Conn, s *DomainSocketServer) *ClientConnection {
 	cc := &ClientConnection{
-		ID:   pkg.GenerateUniqueID(),
-		Conn: conn,
+		ID:         pkg.GenerateUniqueID(),
+		Conn:       conn,
+		incoming:   make(chan string),
+		outgoing:   make(chan string),
+		disconnect: make(chan bool),
+		server:     s,
 	}
 
 	return cc
@@ -52,17 +60,27 @@ func (cc *ClientConnection) WriteToClient(s string) error {
 	return nil
 }
 
-func (cc *ClientConnection) ProcessRequest(leaving chan *ClientConnection, errors chan *ClientConnectionError) {
-	// Defer leaving in case return early
-	defer func() {
-		leaving <- cc
-	}()
+func (cc *ClientConnection) Close() {
+	cc.Conn.Close()
+	close(cc.incoming)
+	close(cc.outgoing)
+	close(cc.disconnect)
+	cc.server.leaving <- cc
+	fmt.Println("Closing client connection")
+}
+
+func (cc *ClientConnection) Start() {
+	defer cc.Close()
+	go cc.processFile()
+	go cc.writeResponse()
+	<-cc.disconnect // Block until disconnect channel
+}
+
+func (cc *ClientConnection) processFile() {
+	errors := cc.server.clientErrors
 
 	reader := bufio.NewReader(cc.Conn)
-	// writer := bufio.NewWriter(cc.Conn)
-
 	var sb strings.Builder
-
 	// Process metadata first
 	header, err := reader.ReadString('\n')
 	if err != nil {
@@ -87,29 +105,44 @@ func (cc *ClientConnection) ProcessRequest(leaving chan *ClientConnection, error
 		sb.WriteString(trimmedLine + "\n")
 	}
 
-	fmt.Println("Header: ", header)
-	fmt.Println(sb.String())
+	// Count alphas
 	count := 0
 	fullMsg := sb.String()
 	for _, c := range fullMsg {
 		if unicode.IsLetter(c) {
 			count++
-			fmt.Println(string(c), count)
 		}
 	}
 
-	fmt.Println(count)
-	// // Add new line for seperator
-	// resp := fmt.Sprintf("%d\n", count)
-	// _, err = writer.WriteString(resp)
-	// if err != nil {
-	// 	errors <- NewCCError(cc, pkg.HandleErrorFormat("ClientConnection.ProcessRequest: Error writing to client", err))
-	// }
-
-	fmt.Println("ClientConnection processing request concluding...")
+	// Send response to outgoing channel for processing
+	header = strings.TrimSpace(header)
+	fmt.Printf("File: %s\nCount: %d\n", header, count)
+	resp := fmt.Sprintf("%d\n", count)
+	cc.outgoing <- resp
 }
 
-func (cc *ClientConnection) Close() {
-	cc.Conn.Close()
-	fmt.Println("Closing client connection")
+func (cc *ClientConnection) writeResponse() {
+	// Keep looping/opening connection until client disconnects
+	errors := cc.server.clientErrors
+	writer := bufio.NewWriter(cc.Conn)
+
+	for resp := range cc.outgoing {
+		_, err := writer.WriteString(resp)
+		if err != nil {
+			errors <- NewCCError(cc, pkg.HandleErrorFormat("ClientConnection.ProcessRequest: Error writing to client", err))
+			break
+		}
+
+		// Flush after writing the response
+		err = writer.Flush()
+		if err != nil {
+			errors <- NewCCError(cc, pkg.HandleErrorFormat("ClientConnection.ProcessRequest: Error flushing data to client", err))
+			break
+		}
+
+		// Finished communication
+		break
+	}
+
+	cc.disconnect <- true
 }

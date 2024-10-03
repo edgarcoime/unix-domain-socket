@@ -3,6 +3,7 @@ package client
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -112,8 +113,26 @@ func (sc *ServerConnection) sendFile() {
 			log.Fatalf("Error flushing data: %v\n", err)
 		}
 	}
+
+	// Signals to the server that there is no more incoming data
+	sc.Conn.CloseWrite()
 }
 
 func (sc *ServerConnection) receiveMsg() {
 	defer sc.wg.Done()
+	for {
+		message, err := sc.Reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				log.Println("Server closed the connection.")
+			} else {
+				log.Printf("Error reading from server: %v", err)
+			}
+			os.Exit(0)
+		}
+
+		// Received final msg from server
+		fmt.Printf("Message received from server: %s\n", message)
+		break
+	}
 }
