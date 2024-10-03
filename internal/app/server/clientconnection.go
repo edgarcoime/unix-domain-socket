@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"unicode"
 
 	"github.com/edgarcoime/domainsocket/internal/pkg"
 )
@@ -58,7 +59,16 @@ func (cc *ClientConnection) ProcessRequest(leaving chan *ClientConnection, error
 	}()
 
 	reader := bufio.NewReader(cc.Conn)
+	// writer := bufio.NewWriter(cc.Conn)
+
 	var sb strings.Builder
+
+	// Process metadata first
+	header, err := reader.ReadString('\n')
+	if err != nil {
+		errors <- NewCCError(cc, pkg.HandleErrorFormat("ClientConnection.ProcessRequest: Could not read packet header for the file", err))
+		return
+	}
 
 	for {
 		// Read until new line
@@ -77,38 +87,23 @@ func (cc *ClientConnection) ProcessRequest(leaving chan *ClientConnection, error
 		sb.WriteString(trimmedLine + "\n")
 	}
 
+	fmt.Println("Header: ", header)
 	fmt.Println(sb.String())
+	count := 0
+	fullMsg := sb.String()
+	for _, c := range fullMsg {
+		if unicode.IsLetter(c) {
+			count++
+			fmt.Println(string(c), count)
+		}
+	}
 
-	// Read Client message stream
-	// - First packet is meta data colon seperated
-	// - The rest will be txt contained in the file
-	// Create a reader to read client text
-	// Loop through all client requests until completed
-	// - Use string builder to be more efficient
-	// - build string and do calculations on it
-	// Respond back to the user and and connection
-
-	// fmt.Println("ClientConnection processing request...")
-	// buf := make([]byte, BYTE_BUFFER)
-	//
-	// // NEED n so that null bytes are ommitted when converting to string
-	// n, err := cc.Conn.Read(buf)
+	fmt.Println(count)
+	// // Add new line for seperator
+	// resp := fmt.Sprintf("%d\n", count)
+	// _, err = writer.WriteString(resp)
 	// if err != nil {
-	// 	cc.WriteToClient("Could not read incoming message.")
-	// 	msg := "ClientConnection.ProcessRequest: Could not read client message through buffer."
-	// 	errors <- NewCCError(cc, pkg.HandleErrorFormat(msg, err))
-	// 	return
-	// }
-	//
-	// // Only slices can be converted to string not []byte
-	// msg := string(buf[:n])
-	//
-	// // Echo message back to user
-	// err = cc.WriteToClient(msg)
-	// if err != nil {
-	// 	cc.WriteToClient("Could not write back to respond.")
-	// 	errors <- NewCCError(cc, err)
-	// 	return
+	// 	errors <- NewCCError(cc, pkg.HandleErrorFormat("ClientConnection.ProcessRequest: Error writing to client", err))
 	// }
 
 	fmt.Println("ClientConnection processing request concluding...")

@@ -119,7 +119,14 @@ func (sc *ServerConnection) ProcessRequest() {
 	fmt.Println("found file")
 
 	fileReader := bufio.NewReader(file)
-	connWriter := bufio.NewWriter(sc.Conn)
+	writer := bufio.NewWriter(sc.Conn)
+	// reader := bufio.NewReader(sc.Conn)
+
+	// Create first packet
+	_, err = writer.WriteString(sc.Filepath + "\n")
+	if err != nil {
+		log.Fatalf("Could not send header for the packets to the server\n")
+	}
 
 	// Loop through chunks of the file and send chunks to the server
 	for {
@@ -128,50 +135,35 @@ func (sc *ServerConnection) ProcessRequest() {
 			if err.Error() == "EOF" {
 				if len(line) > 0 {
 					// send last line if doesn't work with new line
-					_, writeErr := connWriter.WriteString(line)
+					_, writeErr := writer.WriteString(line)
 					if writeErr != nil {
-						log.Printf("Error sending last line: %v", writeErr)
+						log.Printf("Error sending last line: %v\n", writeErr)
 						break
 					}
 				}
 				break
 			}
-			log.Fatalf("Error reading the file: %s", err)
+			log.Fatalf("Error reading the file: %s\n", err)
 		}
 
 		// Send the line to the server
-		_, err = connWriter.WriteString(line)
+		_, err = writer.WriteString(line)
 		if err != nil {
-			log.Fatalf("Error sending data: %v", err)
+			log.Fatalf("Error sending data: %v\n", err)
 		}
 
 		// Flush the buffered data to ensure it's sent immediately
-		err = connWriter.Flush()
+		err = writer.Flush()
 		if err != nil {
-			log.Fatalf("Error flushing data: %v", err)
+			log.Fatalf("Error flushing data: %v\n", err)
 		}
 	}
 
-	// send line to server
-
-	// Write message to the server
-	// outboundMsg := []byte(content)
-	// _, err = sc.Conn.Write(outboundMsg)
+	// line, err := reader.ReadString('\n')
 	// if err != nil {
-	// 	log.Fatalf("Failed to write to the socket: %s\n", err)
+	// 	log.Fatalf("Could not read final response answer from server\n", err)
 	// }
-	//
-	// // Read inbound message from the server
-	// buf := make([]byte, 4096)
-	// n, err := sc.Conn.Read(buf)
-	// if err != nil {
-	// 	log.Fatalf("Failed to read from socket: %s\n", err)
-	// }
-	//
-	// buf.len
-	//
-	// inboundMsg := string(buf[:n])
-	// fmt.Printf("Server Response: %s\n", inboundMsg)
+	// fmt.Printf("The alpha count for the file \"%s\" is:\n%d\n", sc.Filepath, line)
 }
 
 func ParseFlags() *ClientOpts {
