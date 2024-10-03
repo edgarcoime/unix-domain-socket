@@ -7,6 +7,10 @@ import (
 	"github.com/edgarcoime/domainsocket/internal/pkg"
 )
 
+const (
+	BYTE_BUFFER = pkg.BYTE_BUFFER
+)
+
 type ClientConnectionError struct {
 	CC    *ClientConnection
 	Error error
@@ -49,8 +53,17 @@ func (cc *ClientConnection) ProcessRequest(leaving chan *ClientConnection, error
 		leaving <- cc
 	}()
 
+	// Read Client message stream
+	// - First packet is meta data colon seperated
+	// - The rest will be txt contained in the file
+	// Create a reader to read client text
+	// Loop through all client requests until completed
+	// - Use string builder to be more efficient
+	// - build string and do calculations on it
+	// Respond back to the user and and connection
+
 	fmt.Println("ClientConnection processing request...")
-	buf := make([]byte, 4096)
+	buf := make([]byte, BYTE_BUFFER)
 
 	// NEED n so that null bytes are ommitted when converting to string
 	n, err := cc.Conn.Read(buf)
@@ -62,26 +75,16 @@ func (cc *ClientConnection) ProcessRequest(leaving chan *ClientConnection, error
 	}
 
 	// Only slices can be converted to string not []byte
-	filepath := string(buf[:n])
-
-	// Client will just send filename
-	m, err := pkg.CheckFileExists(filepath)
-	if err != nil {
-		cc.WriteToClient(fmt.Sprintf("File does not exist or given invalid path. Please check path given."))
-		msg := fmt.Sprintf("ClientConnection.ProcessRequest: File does not exist or invalid name.")
-		errors <- NewCCError(cc, pkg.HandleErrorFormat(msg, err))
-		return
-	}
+	msg := string(buf[:n])
 
 	// Echo message back to user
-	err = cc.WriteToClient(m)
+	err = cc.WriteToClient(msg)
 	if err != nil {
 		cc.WriteToClient("Could not write back to respond.")
 		errors <- NewCCError(cc, err)
 		return
 	}
 
-	fmt.Println(m)
 	fmt.Println("ClientConnection processing request concluding...")
 }
 

@@ -131,10 +131,10 @@ func (dss *DomainSocketServer) Start() error {
 	fmt.Printf("TCP Addr: %+v\n", tcpAddr)
 	fmt.Printf("DSS: %+v\n", dss)
 
-	// // Activate goroutine to handle All channels
-	// dss.listen()
-	// // Activate goroutine to handle incoming connections
-	// dss.handleConnections(listener)
+	// Activate goroutine to handle All channels
+	dss.listen()
+	// Activate goroutine to handle incoming connections
+	dss.handleConnections(listener)
 
 	return nil
 }

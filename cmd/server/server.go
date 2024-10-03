@@ -12,8 +12,9 @@ import (
 
 const (
 	DEFAULT_MAX_CLIENTS = pkg.DEFAULT_MAX_CLIENTS
-	MAX_CMD_ARGUMENTS   = 4
+	DEFAULT_SERVER_ADDR = pkg.DEFAULT_SERVER_ADDR
 	TYPE                = pkg.SERVER_TYPE
+	MAX_CMD_ARGUMENTS   = 4
 )
 
 type ServerParams struct {
@@ -66,9 +67,9 @@ You do not need to supply a flag to run the program but look at the -h docs to c
 
 	// Parse flags
 	flag.StringVar(
-		&paramAddress, "a", "",
+		&paramAddress, "a", DEFAULT_SERVER_ADDR,
 		// NOTE: Check if need to say valid ip address
-		"A valid address the server will bind and listen to. Otherwise will default to local port",
+		"A valid address the server will bind and listen to. Otherwise will default to loopback or local address (ie. 0.0.0.0)",
 	)
 	flag.StringVar(
 		&paramPort, "p", "",

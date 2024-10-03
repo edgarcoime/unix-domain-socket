@@ -14,6 +14,8 @@ import (
 
 const (
 	DEFAULT_SOCKET_FILE = pkg.DEFAULT_SOCKET_FILE
+	DEFAULT_ADDR        = pkg.DEFAULT_SERVER_ADDR
+	CONN_TYPE           = pkg.SERVER_TYPE
 	DEFAULT_FILEPATH    = ""
 	MAX_CMD_ARGUMENTS   = 4
 )
@@ -21,20 +23,28 @@ const (
 type ClientOptsFunc func(*ClientOpts)
 
 type ClientOpts struct {
-	SocketFile string
-	Filepath   string
+	Address  string
+	Port     string
+	Filepath string
 }
 
 func defaultOpts() ClientOpts {
 	return ClientOpts{
-		SocketFile: DEFAULT_SOCKET_FILE,
-		Filepath:   DEFAULT_FILEPATH,
+		Address:  DEFAULT_ADDR,
+		Port:     "",
+		Filepath: DEFAULT_FILEPATH,
 	}
 }
 
-func withSocketFile(s string) ClientOptsFunc {
+func withAddress(s string) ClientOptsFunc {
 	return func(opts *ClientOpts) {
-		opts.SocketFile = s
+		opts.Address = s
+	}
+}
+
+func withPort(s string) ClientOptsFunc {
+	return func(opts *ClientOpts) {
+		opts.Port = s
 	}
 }
 
@@ -52,10 +62,91 @@ func NewClientOpts(opts ...ClientOptsFunc) *ClientOpts {
 	return &o
 }
 
+type ServerConnection struct {
+	LocalAddr  *net.TCPAddr
+	RemoteAddr *net.TCPAddr
+	Conn       *net.TCPConn
+	Filepath   string
+}
+
+func NewServerConnection(r *net.TCPAddr, fp string) *ServerConnection {
+	return &ServerConnection{
+		LocalAddr:  nil,
+		RemoteAddr: r,
+		Conn:       nil,
+		Filepath:   fp,
+	}
+}
+
+func (sc *ServerConnection) Start() {
+	// Attempt connection
+	var localAddr *net.TCPAddr = nil
+	conn, err := net.DialTCP(CONN_TYPE, localAddr, sc.RemoteAddr)
+	if err != nil {
+		log.Fatalf("Error occured during net.DialTCP: \nPlease check the remote address (%s).\n%s\n", sc.RemoteAddr, err)
+	}
+
+	sc.LocalAddr = localAddr
+	sc.Conn = conn
+
+	// REMEMBER IF THERE IS AN OS EXIT YOU MUST SET THIS UP
+	os_c := make(chan os.Signal, 1)
+	signal.Notify(os_c, syscall.SIGINT, syscall.SIGTERM)
+	go func(c net.Conn) {
+		s := <-os_c
+		fmt.Println("Sig call shutdown")
+		fmt.Println("Os signal: ", s)
+		sc.Close()
+		os.Exit(1)
+	}(conn)
+}
+
+func (sc *ServerConnection) Close() {
+	sc.Close()
+}
+
+func (sc *ServerConnection) ProcessRequest() {
+	// CONNECTED TO SERVER NOW
+	file, err := os.Open(sc.Filepath)
+	if err != nil {
+		log.Fatalf("Failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	// Read file
+	content, err := pkg.ReadTextFileContents(sc.Filepath)
+	if err != nil {
+		log.Fatalf("Failed to read and open the file at path: %s\n", sc.Filepath)
+	}
+
+	// Loop through chunks of the file and send chunks to the server
+
+	// Write message to the server
+	outboundMsg := []byte(content)
+	_, err = sc.Conn.Write(outboundMsg)
+	if err != nil {
+		log.Fatalf("Failed to write to the socket: %s\n", err)
+	}
+
+	// Read inbound message from the server
+	buf := make([]byte, 4096)
+	n, err := sc.Conn.Read(buf)
+	if err != nil {
+		log.Fatalf("Failed to read from socket: %s\n", err)
+	}
+
+	buf.len
+
+	inboundMsg := string(buf[:n])
+	fmt.Printf("Server Response: %s\n", inboundMsg)
+}
+
 func ParseFlags() *ClientOpts {
 	// Parse arguments and user input
-	var paramSocket string
+	// Set Connection Type flags
 	var paramFilename string
+	var paramAddress string
+	var paramPort string
 
 	// Validate max amount of args
 	if len(os.Args) > MAX_CMD_ARGUMENTS+1 {
@@ -68,8 +159,12 @@ Please supply at least the desired filename to run the program or use the follow
 	}
 
 	flag.StringVar(
-		&paramSocket, "s", DEFAULT_SOCKET_FILE,
-		"A valid path to the socket file that the client will attempt to bind and listen to (ex. \"/tmp/example.sock\").",
+		&paramAddress, "a", DEFAULT_ADDR,
+		"A valid address the client will attempt to connect to. Otherwise will default to loopback or local address (ie. 0.0.0.0)",
+	)
+	flag.StringVar(
+		&paramPort, "p", "",
+		"A valid port the server will bind and listen to.",
 	)
 	flag.StringVar(
 		&paramFilename, "f", DEFAULT_FILEPATH,
@@ -82,10 +177,14 @@ Please supply at least the desired filename to run the program or use the follow
 	if paramFilename == "" {
 		log.Fatal("Missing required parameter socket (-f), the client needs a path to a file to ask the server about.")
 	}
+	if paramPort == "" {
+		log.Fatal("Missing required parameter port (-p), The server needs a port to listen to.")
+	}
 
 	// Create options struct
-	opts = append(opts, withSocketFile(pkg.StringInputParser(paramSocket)))
 	opts = append(opts, withFilepath(pkg.StringInputParser(paramFilename)))
+	opts = append(opts, withAddress(paramAddress))
+	opts = append(opts, withPort(paramPort))
 	return NewClientOpts(opts...)
 }
 
@@ -95,49 +194,21 @@ func main() {
 	opts := ParseFlags()
 
 	msg := `Starting up Client with the following configurations:
-	Socketfile: %s
+	Address: %s
+	Port: %s
 	Filepath: %s
 Attempting to connect to server now...`
-	fmt.Printf(msg, opts.SocketFile, opts.Filepath)
+	fmt.Printf(msg, opts.Address, opts.Port, opts.Filepath)
 	fmt.Println("")
 
-	// establish connection
-	conn, err := net.Dial("unix", opts.SocketFile)
+	// Parse address
+	fullAddr := fmt.Sprintf("%s:%s", opts.Address, opts.Port)
+	remoteAddr, err := net.ResolveTCPAddr(CONN_TYPE, fullAddr)
 	if err != nil {
-		log.Fatalf("Failed to connect to the socket: %s", err)
+		log.Fatalf("Invalid Address format please check address format of the following: %#v\n%s\n", fullAddr, err)
 	}
 
-	// intercept os signal cleanup functions
-	// REMEMBER IF THERE IS AN OS EXIT YOU MUST SET THIS UP
-	os_c := make(chan os.Signal, 1)
-	signal.Notify(os_c, syscall.SIGINT, syscall.SIGTERM)
-	defer conn.Close()
-	go func(c net.Conn) {
-		s := <-os_c
-		fmt.Println("Sig call shutdown")
-		fmt.Println("Os signal: ", s)
-		c.Close()
-		os.Exit(1)
-	}(conn)
-
-	fmt.Println("writing start")
-	// Write message to the server
-	outboundMsg := []byte(opts.Filepath)
-	_, err = conn.Write(outboundMsg)
-	if err != nil {
-		log.Fatalf("Failed to write to the socket: %s", err)
-	}
-	fmt.Println("writing end")
-
-	fmt.Println("reading start")
-	// Read inbound message from the server
-	buf := make([]byte, 4096)
-	n, err := conn.Read(buf)
-	if err != nil {
-		log.Fatalf("Failed to read from socket: %s", err)
-	}
-	fmt.Println("reading end")
-
-	inboundMsg := string(buf[:n])
-	fmt.Printf("Server Response: %s\n", inboundMsg)
+	sc := NewServerConnection(remoteAddr, opts.Filepath)
+	sc.Start()
+	sc.ProcessRequest()
 }
