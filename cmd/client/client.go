@@ -16,7 +16,7 @@ const (
 	DEFAULT_ADDR        = pkg.DEFAULT_SERVER_ADDR
 	CONN_TYPE           = pkg.SERVER_TYPE
 	DEFAULT_FILEPATH    = ""
-	MAX_CMD_ARGUMENTS   = 4
+	MAX_CMD_ARGUMENTS   = 6
 )
 
 type ClientOptsFunc func(*ClientOpts)
