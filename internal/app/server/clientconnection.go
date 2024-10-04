@@ -105,6 +105,9 @@ func (cc *ClientConnection) processFile() {
 		sb.WriteString(trimmedLine + "\n")
 	}
 
+	// Delay count
+	// time.Sleep(5 * time.Second)
+
 	// Count alphas
 	count := 0
 	fullMsg := sb.String()
