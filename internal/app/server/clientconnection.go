@@ -81,12 +81,6 @@ func (cc *ClientConnection) processFile() {
 
 	reader := bufio.NewReader(cc.Conn)
 	var sb strings.Builder
-	// Process metadata first
-	header, err := reader.ReadString('\n')
-	if err != nil {
-		errors <- NewCCError(cc, pkg.HandleErrorFormat("ClientConnection.ProcessRequest: Could not read packet header for the file", err))
-		return
-	}
 
 	for {
 		// Read until new line
@@ -103,6 +97,7 @@ func (cc *ClientConnection) processFile() {
 		// Trim newline characters and append to the message
 		trimmedLine := line[:len(line)-1] // Remove the newline character
 		sb.WriteString(trimmedLine + "\n")
+		fmt.Println(trimmedLine + "\n")
 	}
 
 	// Delay count
@@ -118,7 +113,7 @@ func (cc *ClientConnection) processFile() {
 	}
 
 	// Send response to outgoing channel for processing
-	header = strings.TrimSpace(header)
+	header := "Client file"
 	fmt.Printf("File: %s\nCount: %d\n", header, count)
 	resp := fmt.Sprintf("%d\n", count)
 	cc.outgoing <- resp
