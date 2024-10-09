@@ -12,11 +12,9 @@ import (
 )
 
 const (
-	DEFAULT_SOCKET_FILE = pkg.DEFAULT_SOCKET_FILE
-	DEFAULT_ADDR        = pkg.DEFAULT_SERVER_ADDR
-	CONN_TYPE           = pkg.SERVER_TYPE
-	DEFAULT_FILEPATH    = ""
-	MAX_CMD_ARGUMENTS   = 6
+	DEFAULT_ADDR      = pkg.DEFAULT_SERVER_ADDR
+	CONN_TYPE         = pkg.SERVER_TYPE
+	MAX_CMD_ARGUMENTS = 6
 )
 
 type ClientOptsFunc func(*ClientOpts)
@@ -31,7 +29,7 @@ func defaultOpts() ClientOpts {
 	return ClientOpts{
 		Address:  DEFAULT_ADDR,
 		Port:     "",
-		Filepath: DEFAULT_FILEPATH,
+		Filepath: "",
 	}
 }
 
@@ -87,18 +85,18 @@ Please supply at least the desired filename to run the program or use the follow
 		"A valid port the server will bind and listen to.",
 	)
 	flag.StringVar(
-		&paramFilename, "f", DEFAULT_FILEPATH,
-		"A valid path to a file that the client will request the server to check",
+		&paramFilename, "f", "",
+		"A valid path to a file that the client will send to the server.",
 	)
 
 	// Parse flags
 	flag.Parse()
 	var opts []ClientOptsFunc
 	if paramFilename == "" {
-		log.Fatal("Missing required parameter socket (-f), the client needs a path to a file to ask the server about.")
+		log.Fatal("Missing required parameter socket (-f), the client needs a path to a file that the client will send.")
 	}
 	if paramPort == "" {
-		log.Fatal("Missing required parameter port (-p), The server needs a port to listen to.")
+		log.Fatal("Missing required parameter port (-p), The client needs a port to connect to.")
 	}
 
 	// Create options struct

@@ -11,10 +11,10 @@ import (
 )
 
 const (
+	MAX_CMD_ARGUMENTS   = 6
 	DEFAULT_MAX_CLIENTS = pkg.DEFAULT_MAX_CLIENTS
 	DEFAULT_SERVER_ADDR = pkg.DEFAULT_SERVER_ADDR
 	TYPE                = pkg.SERVER_TYPE
-	MAX_CMD_ARGUMENTS   = 4
 )
 
 type ServerParams struct {

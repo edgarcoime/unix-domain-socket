@@ -183,7 +183,7 @@ func (s *NetworkSocketServer) join(cc *ClientConnection) {
 	// Establish client connected
 	s.connections[cc.ID] = cc
 	numClients = s.NumCurrentClients()
-	fmt.Printf("Currently have %d clients...", numClients)
+	fmt.Printf("Currently have %d clients...\n", numClients)
 
 	// Goroutine the client request
 	// All communication needs to be done through channels

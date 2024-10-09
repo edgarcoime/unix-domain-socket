@@ -12,10 +12,6 @@ import (
 	"github.com/edgarcoime/domainsocket/internal/pkg"
 )
 
-const (
-	BYTE_BUFFER = pkg.BYTE_BUFFER
-)
-
 type ClientConnectionError struct {
 	CC    *ClientConnection
 	Error error
@@ -61,7 +57,7 @@ func (cc *ClientConnection) WriteToClient(s string) error {
 }
 
 func (cc *ClientConnection) Close() {
-	cc.Conn.Close()
+	// cc.Conn.Close()
 	close(cc.incoming)
 	close(cc.outgoing)
 	close(cc.disconnect)
