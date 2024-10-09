@@ -68,6 +68,9 @@ func (sc *ServerConnection) Start() {
 
 func (sc *ServerConnection) sendFile() {
 	defer sc.wg.Done() // Mark work as done
+	// Signals to the server that there is no more incoming data
+	defer sc.Conn.CloseWrite()
+
 	// Open file
 	file, err := os.Open(sc.Filepath)
 	if err != nil {
@@ -82,10 +85,22 @@ func (sc *ServerConnection) sendFile() {
 	if err != nil {
 		log.Fatalf("Could not send header for the packets to the server\n")
 	}
+	fmt.Println("succesfully created packet", sc.Filepath)
+
+	// Attempt to peek at the first byte
+	_, err = fileReader.Peek(1)
+	if err != nil {
+		if err == io.EOF {
+			fmt.Println("File is empty, disconnecting from server.")
+			os.Exit(0)
+		}
+		log.Fatalf("Could not send header for the packets to the server\n")
+	}
 
 	// Loop through chunks of the file and send chunks to the server
 	for {
 		line, err := fileReader.ReadString('\n')
+		fmt.Println("succesfully created packet", line)
 		if err != nil {
 			if err.Error() == "EOF" {
 				if len(line) > 0 {
@@ -113,9 +128,6 @@ func (sc *ServerConnection) sendFile() {
 			log.Fatalf("Error flushing data: %v\n", err)
 		}
 	}
-
-	// Signals to the server that there is no more incoming data
-	sc.Conn.CloseWrite()
 }
 
 func (sc *ServerConnection) receiveMsg() {
