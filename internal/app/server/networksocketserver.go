@@ -18,45 +18,45 @@ const (
 )
 
 // DEFAULTS FOR DOMAINSOCKETSERVER CONSTRUCTOR
-type DSSOptsFunc func(*DomainSocketServerOpts)
+type ServerOptsFunc func(*ServerOpts)
 
-type DomainSocketServerOpts struct {
+type ServerOpts struct {
 	Address    string
 	Port       string
 	MaxClients uint
 }
 
-func defaultOpts() DomainSocketServerOpts {
-	return DomainSocketServerOpts{
+func defaultOpts() ServerOpts {
+	return ServerOpts{
 		Address:    "",
 		Port:       "",
 		MaxClients: DEFAULT_MAX_CLIENTS,
 	}
 }
 
-func DSSWithMaxClients(n uint) DSSOptsFunc {
-	return func(opts *DomainSocketServerOpts) {
+func ServerWithMaxClients(n uint) ServerOptsFunc {
+	return func(opts *ServerOpts) {
 		opts.MaxClients = n
 	}
 }
 
-func DSSWithAddress(s string) DSSOptsFunc {
-	return func(opts *DomainSocketServerOpts) {
+func ServerWithAddress(s string) ServerOptsFunc {
+	return func(opts *ServerOpts) {
 		opts.Address = s
 	}
 }
 
-func DSSWithPort(s string) DSSOptsFunc {
-	return func(opts *DomainSocketServerOpts) {
+func ServerWithPort(s string) ServerOptsFunc {
+	return func(opts *ServerOpts) {
 		opts.Port = s
 	}
 }
 
 // DOMAINSOCKETSERVER STRUCT
-type TeardownFunc func(*DomainSocketServer)
+type TeardownFunc func(*NetworkSocketServer)
 
-type DomainSocketServer struct {
-	Opts          DomainSocketServerOpts
+type NetworkSocketServer struct {
+	Opts          ServerOpts
 	connections   map[int64]*ClientConnection
 	joining       chan *ClientConnection
 	leaving       chan *ClientConnection
@@ -64,14 +64,14 @@ type DomainSocketServer struct {
 	teardownFuncs []TeardownFunc
 }
 
-func NewDomainSocketServer(opts ...DSSOptsFunc) *DomainSocketServer {
+func NewNetworkSocketServer(opts ...ServerOptsFunc) *NetworkSocketServer {
 	// Set default options but also check for other custom opts
 	o := defaultOpts()
 	for _, fn := range opts {
 		fn(&o)
 	}
 
-	dss := &DomainSocketServer{
+	server := &NetworkSocketServer{
 		Opts: o,
 		// Handle non-negotiable attributes
 		connections:   make(map[int64]*ClientConnection),
@@ -83,30 +83,30 @@ func NewDomainSocketServer(opts ...DSSOptsFunc) *DomainSocketServer {
 
 	// Teardown will at least have dss.Close
 	teardownFunc := func() TeardownFunc {
-		return func(s *DomainSocketServer) {
+		return func(s *NetworkSocketServer) {
 			fmt.Println("Teardown: dss.close")
 			s.close()
 		}
 	}()
-	dss.teardownFuncs = append(dss.teardownFuncs, teardownFunc)
+	server.teardownFuncs = append(server.teardownFuncs, teardownFunc)
 
 	// Setup Teardown lifeline
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM) // Notifies c if os calls signal (no args means everything)
-	go func(server *DomainSocketServer) {
+	go func(server *NetworkSocketServer) {
 		s := <-c // Blocking call. Cleanup will only be called if something is sent to c chan
 		fmt.Println("OS Signal detected shutting down...")
 		fmt.Println("Got signal: ", s)
 		server.Shutdown()
 		os.Exit(1)
-	}(dss)
+	}(server)
 
-	return dss
+	return server
 }
 
-func (dss *DomainSocketServer) Start() error {
+func (s *NetworkSocketServer) Start() error {
 	// Activate Listener
-	fullAddr := fmt.Sprintf("%s:%s", dss.Opts.Address, dss.Opts.Port)
+	fullAddr := fmt.Sprintf("%s:%s", s.Opts.Address, s.Opts.Port)
 	tcpAddr, err := net.ResolveTCPAddr(SERVER_TYPE, fullAddr)
 	if err != nil {
 		log.Fatalf("Invalid Address format please check address format of the following: %#v\n%s\n", tcpAddr, err)
@@ -118,7 +118,7 @@ func (dss *DomainSocketServer) Start() error {
 	}
 
 	teardownFunc := func(l net.Listener) TeardownFunc {
-		return func(s *DomainSocketServer) {
+		return func(s *NetworkSocketServer) {
 			fmt.Println("Teardown: closing net connection")
 			err := l.Close()
 			if err != nil {
@@ -126,55 +126,52 @@ func (dss *DomainSocketServer) Start() error {
 			}
 		}
 	}(listener)
-	dss.teardownFuncs = append(dss.teardownFuncs, teardownFunc)
-
-	fmt.Printf("TCP Addr: %+v\n", tcpAddr)
-	fmt.Printf("DSS: %+v\n", dss)
+	s.teardownFuncs = append(s.teardownFuncs, teardownFunc)
 
 	// Activate goroutine to handle All channels
-	dss.listen()
+	s.listen()
 	// Activate goroutine to handle incoming connections
-	dss.handleConnections(listener)
+	s.handleConnections(listener)
 
 	return nil
 }
 
-func (dss *DomainSocketServer) listen() {
+func (s *NetworkSocketServer) listen() {
 	// Goroutine responsible for handling any clients coming in through the channels
 	go func() {
 		for {
 			select {
-			case conn := <-dss.joining:
-				dss.join(conn)
-			case conn := <-dss.leaving:
-				dss.leave(conn)
-			case err := <-dss.clientErrors:
-				dss.handleClientError(err)
+			case conn := <-s.joining:
+				s.join(conn)
+			case conn := <-s.leaving:
+				s.leave(conn)
+			case err := <-s.clientErrors:
+				s.handleClientError(err)
 			}
 		}
 	}()
 }
 
-func (dss *DomainSocketServer) handleConnections(l net.Listener) {
+func (s *NetworkSocketServer) handleConnections(l net.Listener) {
 	for {
 		// Accept connection
 		conn, err := l.Accept()
 		if err != nil {
 			// TODO: how to handle if client does not accept cause infinite loops
 			msg := fmt.Sprintf("DomainSocketServer.handleConnections: Failed to accept client")
-			dss.clientErrors <- NewCCError(nil, pkg.HandleErrorFormat(msg, err))
+			s.clientErrors <- NewCCError(nil, pkg.HandleErrorFormat(msg, err))
 			continue
 		}
 
-		client := NewClientConnection(conn, dss)
-		dss.joining <- client
+		client := NewClientConnection(conn, s)
+		s.joining <- client
 	}
 }
 
-func (dss *DomainSocketServer) join(cc *ClientConnection) {
+func (s *NetworkSocketServer) join(cc *ClientConnection) {
 	fmt.Println("Client connecting...")
-	numClients := dss.NumCurrentClients()
-	if numClients >= int(dss.Opts.MaxClients) {
+	numClients := s.NumCurrentClients()
+	if numClients >= int(s.Opts.MaxClients) {
 		msg := fmt.Sprintf(
 			"Sorry, we are currently at full capacity with %d clients. Please try again later.",
 			numClients,
@@ -184,8 +181,8 @@ func (dss *DomainSocketServer) join(cc *ClientConnection) {
 	}
 
 	// Establish client connected
-	dss.connections[cc.ID] = cc
-	numClients = dss.NumCurrentClients()
+	s.connections[cc.ID] = cc
+	numClients = s.NumCurrentClients()
 	fmt.Printf("Currently have %d clients...", numClients)
 
 	// Goroutine the client request
@@ -194,31 +191,31 @@ func (dss *DomainSocketServer) join(cc *ClientConnection) {
 	go cc.Start()
 }
 
-func (dss *DomainSocketServer) leave(cc *ClientConnection) {
+func (s *NetworkSocketServer) leave(cc *ClientConnection) {
 	// cleanup client resources
-	delete(dss.connections, cc.ID)
-	fmt.Printf("Client disconnecting...\nNumber of Clients now: %d\n", dss.NumCurrentClients())
+	delete(s.connections, cc.ID)
+	fmt.Printf("Client disconnecting...\nNumber of Clients now: %d\n", s.NumCurrentClients())
 }
 
-func (dss *DomainSocketServer) handleClientError(ccErr *ClientConnectionError) {
+func (s *NetworkSocketServer) handleClientError(ccErr *ClientConnectionError) {
 	msg := fmt.Sprintf("Internal Client Error: ")
 	log.Println(pkg.HandleErrorFormat(msg, ccErr.Error))
 }
 
-func (dss *DomainSocketServer) close() {
+func (s *NetworkSocketServer) close() {
 	// Cleanup server and destroy any used resources
-	close(dss.joining)
-	close(dss.leaving)
-	close(dss.clientErrors)
+	close(s.joining)
+	close(s.leaving)
+	close(s.clientErrors)
 }
 
-func (dss *DomainSocketServer) Shutdown() {
+func (s *NetworkSocketServer) Shutdown() {
 	// Shutdown in reverse order
-	for i := len(dss.teardownFuncs) - 1; i >= 0; i-- {
-		dss.teardownFuncs[i](dss)
+	for i := len(s.teardownFuncs) - 1; i >= 0; i-- {
+		s.teardownFuncs[i](s)
 	}
 }
 
-func (dss *DomainSocketServer) NumCurrentClients() int {
-	return len(dss.connections)
+func (s *NetworkSocketServer) NumCurrentClients() int {
+	return len(s.connections)
 }

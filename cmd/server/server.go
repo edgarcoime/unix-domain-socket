@@ -86,21 +86,21 @@ You do not need to supply a flag to run the program but look at the -h docs to c
 
 	// Manage optional params
 	serverOptions := NewServerParams().SetAddress(paramAddress).SetPort(paramPort).SetMaxClient(paramMaxClient)
-	var dssOpts []server.DSSOptsFunc
-	dssOpts = append(dssOpts, server.DSSWithAddress(serverOptions.Address))
-	dssOpts = append(dssOpts, server.DSSWithPort(serverOptions.Port))
-	dssOpts = append(dssOpts, server.DSSWithMaxClients(serverOptions.MaxClients))
+	var serverOpts []server.ServerOptsFunc
+	serverOpts = append(serverOpts, server.ServerWithAddress(serverOptions.Address))
+	serverOpts = append(serverOpts, server.ServerWithPort(serverOptions.Port))
+	serverOpts = append(serverOpts, server.ServerWithMaxClients(serverOptions.MaxClients))
 
 	// Create and start server
-	dss := server.NewDomainSocketServer(dssOpts...)
-	msg := `Starting up Domain Socket Server with the following configurations:
+	networkServer := server.NewNetworkSocketServer(serverOpts...)
+	msg := `Starting Network Socket Server (%s) with the following configurations:
 	Address: %s
 	Port: %s
 	MaxClients: %d
 Listening to requests now...`
-	fmt.Printf(msg, dss.Opts.Address, dss.Opts.Port, dss.Opts.MaxClients)
+	fmt.Printf(msg, TYPE, networkServer.Opts.Address, networkServer.Opts.Port, networkServer.Opts.MaxClients)
 	fmt.Println("")
-	err := dss.Start()
+	err := networkServer.Start()
 	if err != nil {
 		log.Fatal(err)
 	}

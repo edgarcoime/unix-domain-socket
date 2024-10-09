@@ -120,6 +120,7 @@ func (sc *ServerConnection) sendFile() {
 
 func (sc *ServerConnection) receiveMsg() {
 	defer sc.wg.Done()
+
 	for {
 		message, err := sc.Reader.ReadString('\n')
 		if err != nil {
@@ -128,6 +129,7 @@ func (sc *ServerConnection) receiveMsg() {
 			} else {
 				log.Printf("Error reading from server: %v", err)
 			}
+
 			os.Exit(0)
 		}
 

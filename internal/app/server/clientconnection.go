@@ -34,10 +34,10 @@ type ClientConnection struct {
 	incoming   chan string
 	outgoing   chan string
 	disconnect chan bool
-	server     *DomainSocketServer
+	server     *NetworkSocketServer
 }
 
-func NewClientConnection(conn net.Conn, s *DomainSocketServer) *ClientConnection {
+func NewClientConnection(conn net.Conn, s *NetworkSocketServer) *ClientConnection {
 	cc := &ClientConnection{
 		ID:         pkg.GenerateUniqueID(),
 		Conn:       conn,
