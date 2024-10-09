@@ -85,7 +85,6 @@ func (sc *ServerConnection) sendFile() {
 	if err != nil {
 		log.Fatalf("Could not send header for the packets to the server\n")
 	}
-	fmt.Println("succesfully created packet", sc.Filepath)
 
 	// Attempt to peek at the first byte
 	_, err = fileReader.Peek(1)
@@ -100,7 +99,6 @@ func (sc *ServerConnection) sendFile() {
 	// Loop through chunks of the file and send chunks to the server
 	for {
 		line, err := fileReader.ReadString('\n')
-		fmt.Println("succesfully created packet", line)
 		if err != nil {
 			if err.Error() == "EOF" {
 				if len(line) > 0 {
