@@ -60,9 +60,9 @@ func (cc *ClientConnection) Close() {
 	if cc.Conn != nil {
 		cc.Conn.Close()
 	}
-	close(cc.incoming)
-	close(cc.outgoing)
-	close(cc.disconnect)
+	// close(cc.incoming)
+	// close(cc.outgoing)
+	// close(cc.disconnect)
 	cc.server.leaving <- cc
 	fmt.Println("Closing client connection")
 }
@@ -147,4 +147,5 @@ func (cc *ClientConnection) writeResponse() {
 		// Finished communication
 		break
 	}
+	cc.disconnect <- true
 }
