@@ -57,7 +57,9 @@ func (cc *ClientConnection) WriteToClient(s string) error {
 }
 
 func (cc *ClientConnection) Close() {
-	// cc.Conn.Close()
+	if cc.Conn != nil {
+		cc.Conn.Close()
+	}
 	close(cc.incoming)
 	close(cc.outgoing)
 	close(cc.disconnect)
@@ -73,6 +75,7 @@ func (cc *ClientConnection) Start() {
 }
 
 func (cc *ClientConnection) processFile() {
+	defer fmt.Println("Closing processFile")
 	errors := cc.server.clientErrors
 
 	reader := bufio.NewReader(cc.Conn)
@@ -81,6 +84,7 @@ func (cc *ClientConnection) processFile() {
 	header, err := reader.ReadString('\n')
 	if err != nil {
 		errors <- NewCCError(cc, pkg.HandleErrorFormat("ClientConnection.ProcessRequest: Could not read packet header for the file", err))
+		cc.disconnect <- true
 		return
 	}
 
@@ -93,7 +97,7 @@ func (cc *ClientConnection) processFile() {
 				break
 			}
 			errors <- NewCCError(cc, pkg.HandleErrorFormat("ClientConnection.ProcessRequest: Error reading from client", err))
-			break
+			return
 		}
 
 		// Trim newline characters and append to the message
@@ -122,6 +126,7 @@ func (cc *ClientConnection) processFile() {
 
 func (cc *ClientConnection) writeResponse() {
 	// Keep looping/opening connection until client disconnects
+	defer fmt.Println("Closing writeResponse")
 	errors := cc.server.clientErrors
 	writer := bufio.NewWriter(cc.Conn)
 
@@ -142,6 +147,4 @@ func (cc *ClientConnection) writeResponse() {
 		// Finished communication
 		break
 	}
-
-	cc.disconnect <- true
 }
